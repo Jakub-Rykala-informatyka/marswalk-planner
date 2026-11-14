@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marswalk HUD</title>
+  <link rel="stylesheet" href="/app/hud.css">
+</head>
+<body>
+  <!-- Black is transparent on XREAL glasses: only the bright elements are drawn -->
+  <main id="hud">
+    <header class="top">
+      <p id="task" class="task">Waiting for ROS 2</p>
+      <p id="target-line" class="target-line">–</p>
+    </header>
+
+    <div class="centre">
+      <svg id="arrow" viewBox="-60 -60 120 120" aria-label="Direction to the next target">
+        <path d="M0 -52 L36 14 L0 4 L-36 14 Z" fill="currentColor"/>
+      </svg>
+      <p id="distance" class="distance">–</p>
+    </div>
+
+    <section class="left">
+      <p class="label">O₂</p>
+      <p id="o2" class="value">–</p>
+      <p id="o2-margin" class="small">margin –</p>
+    </section>
+
+    <section class="right">
+      <p class="label">Rover</p>
+      <p id="rover" class="value">–</p>
+      <p id="rover-state" class="small">–</p>
+    </section>
+
+    <footer class="bottom">
+      <p id="dose" class="small">dose –</p>
+      <p id="alert" class="alert" hidden>TURN BACK</p>
+      <p id="clock" class="small">--:--</p>
+    </footer>
+  </main>
+
+  <script type="module" src="/app/hud.js"></script>
+</body>
+</html>

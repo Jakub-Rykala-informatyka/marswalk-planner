@@ -56,7 +56,7 @@ Uruchomienie:
 ### Co dalej, w kolejności (stan: sobota 21:13)
 
 1. ~~Trzeci rodzaj danych~~, ~~mapa kosztów na tematach ROS~~, ~~planer na tematach ROS~~, ~~budżet wyjścia~~: zrobione.
-2. **HUD w okularach (Rafał).** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard. Źródła danych są gotowe: `/suit/status`, `/route`, `/mission/progress`, pozycje astronauty i łazika.
+2. ~~HUD w okularach~~: zrobione jako strona `app/hud.html` (czarne tło, strzałka do celu, tlen, powrót, alert). Rafał podłącza ją do okularów XREAL One. Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard. Źródła danych są gotowe: `/suit/status`, `/route`, `/mission/progress`, pozycje astronauty i łazika.
 3. **Modele CAD od Gosi** (lista w `docs/cad_dla_gosi.md`): łazik osobowy, końcówka ramienia, skrzynie z narzędziami. Po oddaniu Kuba wstawia je do sceny i do dashboardu.
 4. **Scenariusz burzy słonecznej (Rafał).** Alert w HUD-zie i droga do najbliższego schronienia.
 5. **Pełna misja w symulacji.** Krótka misja testowa przeszła całą trasę bez przewrócenia. Pełny „Boxwork EVA 1” (ok. 4 km) do sprawdzenia do filmu, odcinkami.

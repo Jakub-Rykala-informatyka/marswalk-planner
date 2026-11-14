@@ -246,6 +246,15 @@ back upright on the route and logs it.
 The dashboard's Mission tab shows the plan; the 3D map shows numbered pins and
 the mission route.
 
+## Helmet HUD
+
+`http://localhost:8080/app/hud.html` is the helmet view for the XREAL One
+glasses: black background (transparent on the glasses), bright text only. It
+reads the same WebSocket as the dashboard, nothing is sent back. It shows the
+task now (from `/mission/progress`), an arrow and distance to the next target,
+oxygen with the margin, the rover's distance and state, the dose, and a red
+TURN BACK when `/suit/status` says so.
+
 ## Rover planner
 
 The third tab picks one of the rovers in `app/rover_catalog.json` (pressurised
