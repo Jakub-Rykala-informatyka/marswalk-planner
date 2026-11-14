@@ -1,0 +1,34 @@
+# personal profiles, not for the shared repo
+o_mnie.md
+gosia.md
+
+# raw NASA downloads (large); keep only derived layers in data/layers
+data/raw/*
+!data/raw/README.md
+*.IMG
+*.JP2
+*.tif
+*.tiff
+
+# video sources
+media/raw/
+*.mp4
+*.mov
+*.mkv
+
+# Python / Node / editors
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.vscode/
+.idea/
+
+# ROS 2 build output
+build/
+install/
+log/
+
+# Isaac Sim caches
+*.usd.bak
+.thumbs/
