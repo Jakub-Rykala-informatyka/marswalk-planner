@@ -407,7 +407,7 @@ async function main() {
   }
 
   const feeds = {};
-  for (const name of ["astronaut", "rover"]) {
+  for (const name of ["astronaut", "rover", "arm"]) {
     const image = $(`camera-${name}`);
     feeds[name] = { version: null, loading: false, received: null };
     image.addEventListener("load", () => {
@@ -491,6 +491,49 @@ async function main() {
   });
 
   animate(); // after the mission pins exist, which every frame updates
+
+  // --- Arm remote control ---------------------------------------------------
+  const armConfig = await (await fetch("/data/arm_presets.json")).json();
+  const armSliders = {};
+  const deg = (rad) => (rad * 180) / Math.PI;
+  let armPending = null;
+  function sendArm(angles) {
+    // Coalesce slider movement into at most ten commands a second
+    armPending = { ...(armPending ?? {}), ...angles };
+    if (sendArm.timer) return;
+    sendArm.timer = setTimeout(() => {
+      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ arm_command: armPending }));
+      armPending = null;
+      sendArm.timer = null;
+    }, 100);
+  }
+  for (const joint of armConfig.joints) {
+    const row = document.createElement("label");
+    row.className = "arm-joint";
+    row.innerHTML = `<span>${joint.label}</span><input type="range" min="${joint.min}" max="${joint.max}" step="0.01" value="0"><output>–</output>`;
+    const [slider, readout] = [row.querySelector("input"), row.querySelector("output")];
+    slider.addEventListener("input", () => sendArm({ [joint.name]: Number(slider.value) }));
+    armSliders[joint.name] = { slider, readout };
+    $("arm-joints").append(row);
+  }
+  for (const [name, angles] of Object.entries(armConfig.presets)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = name.replace("_", " ");
+    button.addEventListener("click", () => {
+      const command = Object.fromEntries(armConfig.joints.map((joint, i) => [joint.name, angles[i]]));
+      for (const [joint, angle] of Object.entries(command)) armSliders[joint].slider.value = angle;
+      sendArm(command);
+    });
+    $("arm-presets").append(button);
+  }
+  function showArm(arm) {
+    if (!arm) return;
+    for (const [name, { slider, readout }] of Object.entries(armSliders)) {
+      if (arm[name] === undefined) continue;
+      readout.textContent = `${fmt(deg(arm[name]), 1)}° / ${fmt(deg(Number(slider.value)), 0)}°`;
+    }
+  }
 
   // --- Telemetry ------------------------------------------------------------
   let missionVersion = null;
@@ -593,6 +636,7 @@ async function main() {
     }
     if (message.suit) showSuit(message.suit);
     updateFeeds(message.cameras);
+    showArm(message.arm);
 
     // Helmet-camera overlay: what the astronaut would see on the HUD
     if (a && route.length) {

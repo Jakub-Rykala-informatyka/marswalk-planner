@@ -23,13 +23,13 @@ from nav_msgs.msg import OccupancyGrid, Path as RoutePath
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rosgraph_msgs.msg import Clock
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import Image, JointState, PointCloud2
 from std_msgs.msg import Empty, Float32, String
 
 ROOT = Path(__file__).resolve().parents[1]
 STALE_AFTER = 2.0  # s without a pose before the dashboard shows the source as offline
 COSTMAPS = ("walk", "rover")
-CAMERAS = {"astronaut": "/astronaut/camera/image", "rover": "/rover/camera/image"}
+CAMERAS = {"astronaut": "/astronaut/camera/image", "rover": "/rover/camera/image", "arm": "/rover/arm_camera/image"}
 LIDAR_HEIGHT = 0.45  # m, lidar above the rover pose (sim/sensors.py)
 MAX_POINTS = 20000  # points sent to the browser per scan
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
@@ -70,6 +70,9 @@ class Telemetry(Node):
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.config_pub = self.create_publisher(String, "/rover/config", LATCHED)
         self.mission_start_pub = self.create_publisher(Empty, "/mission/start", 10)
+        self.arm_pub = self.create_publisher(JointState, "/rover/arm/command", 10)
+        self.arm = None
+        self.create_subscription(JointState, "/rover/arm/joint_states", self.on_arm, 10)
         self.mission = (0, None)  # version, plan
         self.create_subscription(String, "/mission/plan", self.on_mission, LATCHED)
         self.mission_route = []
@@ -140,6 +143,16 @@ class Telemetry(Node):
         points = [[round(p.pose.position.x, 2), round(p.pose.position.y, 2)] for p in msg.poses]
         self.route = (self.route[0] + 1, points)
 
+    def on_arm(self, msg):
+        self.arm = {name: round(angle, 3) for name, angle in zip(msg.name, msg.position)}
+
+    def command_arm(self, angles):
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = list(angles)
+        msg.position = [float(v) for v in angles.values()]
+        self.arm_pub.publish(msg)
+
     def on_mission_route(self, msg):
         self.mission_route = [[round(p.pose.position.x, 2), round(p.pose.position.y, 2)] for p in msg.poses]
 
@@ -168,6 +181,7 @@ class Telemetry(Node):
                    "route": {"version": self.route[0], "summary": self.route_summary},
                    "points": self.points[0],
                    "mission": self.mission[0],
+                   "arm": self.arm,
                    "cameras": {name: entry[0] for name, entry in self.images.items()}}
         suit = dict(self.suit_status or {})
         if self.dose_rate is not None:
@@ -243,6 +257,8 @@ async def websocket(request):
                 data = json.loads(msg.data)
                 if data.get("goal"):  # a click on the map sets a new science target
                     request.app["telemetry"].publish_goal(data["goal"]["x"], data["goal"]["y"])
+                if data.get("arm_command"):  # arm sliders and presets in the cameras tab
+                    request.app["telemetry"].command_arm(data["arm_command"])
                 if data.get("mission_start"):  # the mission tab
                     request.app["telemetry"].mission_start_pub.publish(Empty())
                 if data.get("rover_config"):  # the rover planner tab

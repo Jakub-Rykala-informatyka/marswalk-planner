@@ -41,6 +41,7 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Dashboard 3D w Three.js zamiast mapy 2D | gotowe |
 | Lidar na łaziku (`/rover/points`) nałożony na widok 3D | gotowe |
 | Kamery kasku i łazika w ROS 2, druga zakładka dashboardu z nakładką HUD | gotowe |
+| Ramię Unitree Z1 na łaziku, zdalne sterowanie przez ROS 2 (`/rover/arm/command`), suwaki i pozycje w dashboardzie, kamera operatora | gotowe |
 | Misja „Boxwork EVA 1”: cel naukowy, 4 cele, wykonawcy, kolejność, tlen, dawka, narzędzia (`/mission/plan`), zakładka „Mission” | gotowe |
 | Zakładka „Rover planner”: 3 łaziki, osprzęt z ilościami, bilans, podgląd 3D, `/rover/config` | gotowe |
 

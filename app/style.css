@@ -57,6 +57,17 @@ body {
 .feed img:not([src]) { visibility: hidden; }
 .no-signal[hidden] { display: none; }
 
+.arm-panel { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.arm-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.arm-presets button {
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--text); font: inherit; font-size: 12px; cursor: pointer;
+}
+.arm-presets button:hover { border-color: var(--accent); }
+.arm-joint { display: grid; grid-template-columns: 90px 1fr 110px; gap: 8px; align-items: center; margin-top: 6px; font-size: 12px; }
+.arm-joint input { width: 100%; accent-color: var(--rover); }
+.arm-joint output { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+
 #planner {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr);

@@ -26,6 +26,7 @@ parser.add_argument("--headless", action="store_true", help="run without the Isa
 parser.add_argument("--ros", action="store_true", help="publish poses to ROS 2")
 parser.add_argument("--camera", choices=("rover", "astronaut"), default="rover", help="what the view follows")
 parser.add_argument("--record", action="store_true", help="save camera frames to media/frames/")
+parser.add_argument("--no-lidar", action="store_true", help="leave the lidar out: its beams show in camera images")
 parser.add_argument("--capture-fps", type=float, default=10.0, help="frames and ROS messages per simulated second")
 parser.add_argument("--max-time", type=float, default=900.0, help="stop after this many simulated seconds")
 args = parser.parse_args()
@@ -128,9 +129,11 @@ class RosPublisher:
         from nav_msgs.msg import Path
         from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from rosgraph_msgs.msg import Clock
+        from sensor_msgs.msg import JointState
         from std_msgs.msg import String
 
         self._types = PoseStamped, Clock, String
+        self._JointState = JointState
         rclpy.init()
         self._rclpy = rclpy
         self.node = rclpy.create_node("marswalk_sim")
@@ -142,6 +145,20 @@ class RosPublisher:
                              reliability=ReliabilityPolicy.RELIABLE)
         self.new_route = None
         self.node.create_subscription(Path, "/route", self._on_route, latched)
+        # Remote arm control: target angles by joint name, applied until the next command
+        self.arm_targets = {}
+        self.node.create_subscription(JointState, "/rover/arm/command", self._on_arm_command, 10)
+        self.arm_state = self.node.create_publisher(JointState, "/rover/arm/joint_states", 10)
+
+    def _on_arm_command(self, msg):
+        self.arm_targets.update(zip(msg.name, msg.position))
+
+    def publish_arm(self, names, positions):
+        msg = self._JointState()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
+        msg.name = list(names)
+        msg.position = [float(v) for v in positions]
+        self.arm_state.publish(msg)
 
     def _on_route(self, msg):
         points = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
@@ -209,10 +226,18 @@ rover = SingleArticulation(
     orientation=np.array([math.cos(start_yaw / 2), 0.0, 0.0, math.sin(start_yaw / 2)]),
 )
 world.scene.add(rover)
+# The Jackal asset carries its own SICK lidar, whose beams are drawn into every
+# camera image; the simulation uses its own lidar (sim/sensors.py) instead
+built_in_lidar = world.stage.GetPrimAtPath("/World/Rover/base_link/sick_lms1xx_lidar_frame/Lidar")
+if built_in_lidar.IsValid():
+    built_in_lidar.SetActive(False)
 if ros:
     from sensors import add_sensors, place_helmet_camera
 
-    add_sensors(world.stage, "/World/Rover")
+    add_sensors(world.stage, "/World/Rover", lidar=not args.no_lidar)
+from arm import ARM_JOINTS, PRESETS, add_arm
+
+add_arm(world.stage, "/World/Rover")
 
 # Astronaut: NASA's Z2 spacesuit if sim/prepare_astronaut.py has made it, else a
 # capsule. No physics; placed on the terrain and turned to the walking direction.
@@ -241,6 +266,10 @@ if not args.headless:
 world.reset()
 left = [i for i, name in enumerate(rover.dof_names) if "left" in name]
 right = [i for i, name in enumerate(rover.dof_names) if "right" in name]
+wheels = left + right
+arm_index = [rover.dof_names.index(name) for name in ARM_JOINTS]
+arm_target = np.array(PRESETS["stow"], dtype=float)
+print(f"rover dofs: {rover.dof_names}")
 
 annotator = None
 if args.record:
@@ -302,7 +331,13 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     velocities = np.zeros(rover.num_dof)
     velocities[left] = (speed - skid) / WHEEL_RADIUS
     velocities[right] = (speed + skid) / WHEEL_RADIUS
-    rover.apply_action(ArticulationAction(joint_velocities=velocities))
+    rover.apply_action(ArticulationAction(joint_velocities=velocities[wheels], joint_indices=np.array(wheels)))
+    if ros and ros.arm_targets:
+        for name, angle in ros.arm_targets.items():
+            if name in ARM_JOINTS:
+                arm_target[ARM_JOINTS.index(name)] = angle
+        ros.arm_targets = {}
+    rover.apply_action(ArticulationAction(joint_positions=arm_target, joint_indices=np.array(arm_index)))
 
     capture = step % steps_per_frame == 0
     if capture:
@@ -317,6 +352,7 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
         if ros:
             ros.publish(t, (*astronaut_xy, astronaut_z), astronaut_yaw, position, orientation, state)
             place_helmet_camera(world.stage, (*astronaut_xy, astronaut_z + EYE_HEIGHT), astronaut_yaw)
+            ros.publish_arm(ARM_JOINTS, rover.get_joint_positions()[arm_index])
         log.writerow([f"{t:.2f}", f"{astronaut_xy[0]:.2f}", f"{astronaut_xy[1]:.2f}",
                       f"{position[0]:.2f}", f"{position[1]:.2f}", f"{position[2]:.2f}",
                       f"{math.degrees(yaw):.1f}", f"{astronaut_s - rover_s:.1f}", state])

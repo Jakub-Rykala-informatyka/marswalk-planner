@@ -22,7 +22,8 @@ for another route.
 | Node | File | Subscribes | Publishes |
 | --- | --- | --- | --- |
 | `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | `/route` | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
-| sensor graph | `sim/sensors.py` (Isaac Sim) | – | `/rover/points`, `/rover/camera/image`, `/astronaut/camera/image` |
+| sensor graph | `sim/sensors.py` (Isaac Sim) | – | `/rover/points`, `/rover/camera/image`, `/astronaut/camera/image`, `/rover/arm_camera/image` |
+| rover arm | `sim/arm.py` (Isaac Sim) | `/rover/arm/command` | `/rover/arm/joint_states` |
 | `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate` |
 | `dose_monitor` | `ros/dose_monitor.py` | `/nasa/dose_rate`, `/astronaut/pose` | `/astronaut/dose_rate`, `/astronaut/dose` |
 | `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
@@ -107,6 +108,32 @@ route from the astronaut's current position.
 
 `/rover/pose` carries the rover's full attitude (the astronaut's only its heading),
 so the lidar points can be put into the `map` frame.
+
+## Rover arm
+
+A Unitree Z1 arm (from the Isaac Sim asset library) is bolted to the helper
+robot: its fixed joint to the world is re-attached to the rover's base link, so
+the arm is part of the rover articulation. Joints `joint1`..`joint6`, limits
+and named poses are in `data/arm_presets.json` (shared with the dashboard).
+
+- `/rover/arm/command` (`sensor_msgs/JointState`): target angles in radians by
+  joint name; joints not named keep their target.
+- `/rover/arm/joint_states` (`sensor_msgs/JointState`): measured angles.
+- `/rover/arm_camera/image`: operator view from behind the rover.
+
+From the command line:
+
+```bash
+./scripts/ros_shell.sh ros2 topic pub --once /rover/arm/command sensor_msgs/msg/JointState "{name: [joint2, joint3], position: [1.2, -1.2]}"
+```
+
+In the dashboard, the Cameras tab has sliders per joint and preset buttons
+(stow, forward, ground, sample box). The arm has no gripper: picking up a
+sample is not simulated.
+
+The Jackal asset has its own SICK lidar, whose beams were drawn into every
+camera image; the simulation disables it and uses its Ouster lidar instead.
+`--no-lidar` leaves that one out too.
 
 ## Suit and safe return
 

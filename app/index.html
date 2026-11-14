@@ -53,6 +53,20 @@
       </div>
       <figcaption><span class="dot rover"></span>Rover front camera · <span id="age-rover">–</span></figcaption>
     </figure>
+    <figure class="feed">
+      <div class="frame">
+        <img id="camera-arm" alt="Operator view of the rover arm">
+        <p class="no-signal" id="nosignal-arm">No signal</p>
+      </div>
+      <figcaption><span class="dot rover"></span>Arm operator view · <span id="age-arm">–</span></figcaption>
+    </figure>
+    <section class="arm-panel">
+      <h2>Rover arm (remote control over ROS 2)</h2>
+      <div class="arm-presets" id="arm-presets"></div>
+      <div id="arm-joints"></div>
+      <p class="note">Sliders send target angles on <code>/rover/arm/command</code>; the numbers on the right are the
+        measured angles from <code>/rover/arm/joint_states</code>.</p>
+    </section>
   </div>
 
   <div id="mission" class="tab-panel" hidden>
