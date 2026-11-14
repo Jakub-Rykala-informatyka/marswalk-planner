@@ -16,7 +16,7 @@ from pathlib import Path
 import rclpy
 from aiohttp import WSMsgType, web
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Path as RoutePath
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rosgraph_msgs.msg import Clock
@@ -50,6 +50,11 @@ class Telemetry(Node):
         self.dose = None
         self.last_pose_wall = 0.0
         self.costmaps = {}  # variant: (version, width, height, cell bytes)
+        self.route = (0, [])  # version, [[x, y], ...]
+        self.route_summary = None
+        self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
+        self.create_subscription(RoutePath, "/route", self.on_route, LATCHED)
+        self.create_subscription(String, "/route/summary", self.on_route_summary, LATCHED)
         self.create_subscription(Clock, "/clock", self.on_clock, 10)
         self.create_subscription(PoseStamped, "/astronaut/pose", self.on_astronaut, 10)
         self.create_subscription(PoseStamped, "/rover/pose", self.on_rover, 10)
@@ -84,11 +89,27 @@ class Telemetry(Node):
         cells = bytes(array_bytes(msg.data))
         self.costmaps[variant] = (version, msg.info.width, msg.info.height, cells)
 
+    def on_route(self, msg):
+        points = [[round(p.pose.position.x, 2), round(p.pose.position.y, 2)] for p in msg.poses]
+        self.route = (self.route[0] + 1, points)
+
+    def on_route_summary(self, msg):
+        self.route_summary = json.loads(msg.data)
+
+    def publish_goal(self, x, y):
+        msg = PoseStamped()
+        msg.header.frame_id = "map"
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.pose.position.x, msg.pose.position.y = float(x), float(y)
+        msg.pose.orientation.w = 1.0
+        self.goal_pub.publish(msg)
+
     def snapshot(self):
         age = self.get_clock().now().nanoseconds * 1e-9 - self.last_pose_wall
         live = self.astronaut is not None and age < STALE_AFTER
         message = {"live": live, "t": self.sim_time, "astronaut": self.astronaut, "rover": None,
-                   "costmaps": {variant: entry[0] for variant, entry in self.costmaps.items()}}
+                   "costmaps": {variant: entry[0] for variant, entry in self.costmaps.items()},
+                   "route": {"version": self.route[0], "summary": self.route_summary}}
         if self.dose_rate is not None:
             message["suit"] = {"dose_rate_uSv_h": round(self.dose_rate, 2), "dose_uSv": round(self.dose, 3)}
         if self.rover:
@@ -102,6 +123,10 @@ class Telemetry(Node):
 def array_bytes(data):
     """OccupancyGrid data as raw bytes, whether rclpy gives an array or a list."""
     return data.tobytes() if hasattr(data, "tobytes") else bytes(v & 0xFF for v in data)
+
+
+async def route(request):
+    return web.json_response(request.app["telemetry"].route[1], headers={"Cache-Control": "no-store"})
 
 
 async def costmap(request):
@@ -122,6 +147,10 @@ async def websocket(request):
         async for msg in ws:
             if msg.type == WSMsgType.ERROR:
                 break
+            if msg.type == WSMsgType.TEXT:
+                goal = json.loads(msg.data).get("goal")
+                if goal:  # a click on the map sets a new science target
+                    request.app["telemetry"].publish_goal(goal["x"], goal["y"])
     finally:
         request.app["clients"].discard(ws)
     return ws
@@ -165,6 +194,7 @@ def main():
     app.router.add_get("/", index)
     app.router.add_get("/ws", websocket)
     app.router.add_get("/costmap/{variant}", costmap)
+    app.router.add_get("/route", route)
     app.router.add_static("/app", ROOT / "app")
     app.router.add_static("/data", ROOT / "data")
     web.run_app(app, port=args.port, print=lambda *_: print(f"dashboard on http://localhost:{args.port}"))

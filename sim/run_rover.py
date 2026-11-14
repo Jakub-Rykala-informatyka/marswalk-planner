@@ -5,7 +5,9 @@ scripts/run_sim.sh, which sets the ROS 2 environment for --ros.
 
 The astronaut is a marker moved along the route at walking pace. The rover is
 the Clearpath Jackal from the Isaac Sim asset library, driven with physics.
-With --ros both poses are published to ROS 2 (topics in ros/README.md).
+With --ros both poses are published to ROS 2 (topics in ros/README.md) and the
+route comes from the planner on /route; a new route redirects the walk from
+where the astronaut stands.
 """
 
 import argparse
@@ -17,7 +19,8 @@ from pathlib import Path
 import numpy as np
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument("--route", default="data/route_example.geojson", help="relative to the repo root")
+parser.add_argument("--route", default="data/route_example.geojson",
+                    help="relative to the repo root; with --ros only used if /route stays silent")
 parser.add_argument("--headless", action="store_true", help="run without the Isaac Sim window")
 parser.add_argument("--ros", action="store_true", help="publish poses to ROS 2")
 parser.add_argument("--camera", choices=("rover", "astronaut"), default="rover", help="what the view follows")
@@ -60,16 +63,21 @@ ASTRONAUT_HEIGHT = 1.8  # m
 EYE_HEIGHT = 1.7  # m
 HEAD_START = 5.0  # m of route between rover and astronaut at the start
 FOLLOW_GAP = 4.0  # m the rover keeps behind the astronaut
+ROUTE_WAIT = 20.0  # s to wait for the planner's /route at start-up
 
 
 class Route:
     """A polyline in local metres, addressed by distance walked along it."""
 
-    def __init__(self, path):
-        feature = json.loads((ROOT / path).read_text())["features"][0]
-        self.xy = np.array(feature["geometry"]["coordinates"], dtype=float)[:, :2]
+    def __init__(self, xy):
+        self.xy = np.asarray(xy, dtype=float)[:, :2]
         self.arc = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(self.xy, axis=0), axis=1))])
         self.length = float(self.arc[-1])
+
+    @classmethod
+    def from_file(cls, path):
+        feature = json.loads((ROOT / path).read_text())["features"][0]
+        return cls(feature["geometry"]["coordinates"])
 
     def point(self, s):
         return np.array([np.interp(s, self.arc, self.xy[:, 0]), np.interp(s, self.arc, self.xy[:, 1])])
@@ -113,6 +121,8 @@ class RosPublisher:
         simulation_app.update()
         import rclpy
         from geometry_msgs.msg import PoseStamped
+        from nav_msgs.msg import Path
+        from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
         from rosgraph_msgs.msg import Clock
         from std_msgs.msg import String
 
@@ -124,6 +134,28 @@ class RosPublisher:
         self.astronaut = self.node.create_publisher(PoseStamped, "/astronaut/pose", 10)
         self.rover = self.node.create_publisher(PoseStamped, "/rover/pose", 10)
         self.rover_state = self.node.create_publisher(String, "/rover/state", 10)
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                             reliability=ReliabilityPolicy.RELIABLE)
+        self.new_route = None
+        self.node.create_subscription(Path, "/route", self._on_route, latched)
+
+    def _on_route(self, msg):
+        points = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        if len(points) > 1:
+            self.new_route = points
+
+    def poll_route(self):
+        """Route points if a new route arrived since the last call, else None."""
+        self._rclpy.spin_once(self.node, timeout_sec=0.0)
+        points, self.new_route = self.new_route, None
+        return points
+
+    def wait_for_route(self, seconds):
+        for _ in range(int(seconds * 10)):
+            self._rclpy.spin_once(self.node, timeout_sec=0.1)
+            if self.new_route:
+                return self.poll_route()
+        return None
 
     def _pose(self, stamp, position, yaw):
         PoseStamped = self._types[0]
@@ -150,7 +182,10 @@ class RosPublisher:
         self._rclpy.shutdown()
 
 
-route = Route(args.route)
+ros = RosPublisher() if args.ros else None
+planned = ros.wait_for_route(ROUTE_WAIT) if ros else None
+route = Route(planned) if planned else Route.from_file(args.route)
+print(f"route: {'/route from the planner' if planned else args.route}, {route.length:.0f} m")
 meta = json.loads((TERRAIN / "meta.json").read_text())
 heights = np.load(TERRAIN / "heights.npy")
 cell = meta["cell_m"]
@@ -188,8 +223,6 @@ world.reset()
 left = [i for i, name in enumerate(rover.dof_names) if "left" in name]
 right = [i for i, name in enumerate(rover.dof_names) if "right" in name]
 
-ros = RosPublisher() if args.ros else None
-
 annotator = None
 if args.record:
     import omni.replicator.core as rep
@@ -211,9 +244,15 @@ log.writerow(["t", "astronaut_x", "astronaut_y", "rover_x", "rover_y", "rover_z"
 steps_per_frame = max(1, round(1.0 / (args.capture_fps * PHYSICS_DT)))
 rover_s, frame, step = 0.0, 0, 0
 state = "following"
+walk_start, head_start = SETTLE_STEPS * PHYSICS_DT, HEAD_START
 while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     t = step * PHYSICS_DT
-    astronaut_s = min(HEAD_START + WALK_SPEED * max(0.0, t - SETTLE_STEPS * PHYSICS_DT), route.length)
+    points = ros.poll_route() if ros else None
+    if points:  # new route from the planner: it starts where the astronaut stands
+        route = Route(points)
+        walk_start, head_start, rover_s = t, 0.0, 0.0
+        print(f"t={t:.0f} s: new route, {route.length:.0f} m")
+    astronaut_s = min(head_start + WALK_SPEED * max(0.0, t - walk_start), route.length)
     astronaut_xy = route.point(astronaut_s)
     astronaut_z = ground_height(heights, cell, *astronaut_xy)
     astronaut_yaw = route.heading(astronaut_s)
@@ -225,8 +264,8 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     room = astronaut_s - FOLLOW_GAP - rover_s  # how far the rover may still drive
     if room <= 0.0:
         state = "arrived" if astronaut_s >= route.length else "waiting"
-        if state == "arrived":
-            break
+        if state == "arrived" and not ros:
+            break  # with ROS keep running: a new goal can start another walk
         speed = skid = 0.0
     else:
         state = "following"

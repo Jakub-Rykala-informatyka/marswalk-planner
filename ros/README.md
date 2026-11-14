@@ -21,11 +21,12 @@ for another route.
 
 | Node | File | Subscribes | Publishes |
 | --- | --- | --- | --- |
-| `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | – | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
+| `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | `/route` | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
 | `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate` |
 | `dose_monitor` | `ros/dose_monitor.py` | `/nasa/dose_rate`, `/astronaut/pose` | `/astronaut/dose_rate`, `/astronaut/dose` |
 | `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
-| `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser |
+| `planner` | `ros/planner.py` | `/costmap/walk`, `/nasa/dose_rate`, `/astronaut/pose`, `/goal_pose` | `/route`, `/route/summary` |
+| `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser, `/goal_pose` from map clicks |
 
 ## NASA layer topics
 
@@ -68,6 +69,26 @@ value live and both maps are recomputed and redrawn on the dashboard:
 ./scripts/ros_shell.sh ros2 param set /costmap walk.max_slope_deg 20.0
 ```
 
+## Planner
+
+A* on `/costmap/walk`, merged into 2 × 2 blocks (about 4 m; a block takes its
+highest cost, so a keep-out cell blocks it). A step costs its length times
+`1 + cost / cost_scale`; cells at 100 are never entered. It plans:
+
+- at start, from the `start_x/start_y` to the `goal_x/goal_y` parameters (the
+  ends of `data/route_example.geojson`),
+- on every `/goal_pose` (a click on the dashboard map, or RViz "2D Goal Pose"),
+  from where the astronaut stands,
+- whenever a cost map changes, for example after `ros2 param set /costmap ...`.
+
+`/route` is a latched `nav_msgs/Path` in the `map` frame. `/route/summary` is a
+`std_msgs/String` with JSON: `length_m`, `walk_time_s` (at 0.8 m/s, the
+simulation's pace), `dose_uSv` (dose-rate layer along the route) and
+`max_cost`, or `{"ok": false}` when no route avoids the keep-out cells.
+
+The simulation waits up to 20 s for `/route` at start, then follows every new
+route from the astronaut's current position.
+
 ## Topics published by the simulation
 
 | Topic | Type | Content |
@@ -92,11 +113,11 @@ route files, so a pose indexes the layers directly:
 
 ## Not here yet
 
-Suit sensor nodes for oxygen and battery, and the planner on top of the cost maps.
+Suit sensor nodes for oxygen and battery, a combined drive-and-walk plan on `/costmap/rover`, and the safe-return check.
 
 ## Dashboard
 
-`./scripts/run_dashboard.sh` starts `nasa_layers`, `dose_monitor`, `costmap` and
-`ros/telemetry_server.py` in one container. The telemetry server serves the app
+`./scripts/run_dashboard.sh` starts `nasa_layers`, `dose_monitor`, `costmap`,
+`planner` and `ros/telemetry_server.py` in one container. The telemetry server serves the app
 on http://localhost:8080 and streams the topics above to the browser over
 WebSocket (`/ws`), five messages per second.

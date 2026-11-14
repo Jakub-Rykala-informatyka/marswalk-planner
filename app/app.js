@@ -114,15 +114,34 @@ async function main() {
     costOverlays[variant].setUrl(canvas.toDataURL());
   }
 
+  // The route comes from the planner node; the example file is shown until it does
   const routeFile = await (await fetch("/data/route_example.geojson")).json();
-  const route = routeFile.features[0].geometry.coordinates;
+  let route = routeFile.features[0].geometry.coordinates;
+  let routeVersion = null;
   // Dark casing under the dashes keeps the route readable on the orange terrain
-  const routeLine = route.map(([x, y]) => [y, x]);
-  L.polyline(routeLine, { color: "#14110f", weight: 6, opacity: 0.7 }).addTo(map);
-  L.polyline(routeLine, { color: "#ffffff", weight: 3, dashArray: "6 6" }).addTo(map);
-  const goal = route[route.length - 1];
-  L.circleMarker([goal[1], goal[0]], { radius: 7, color: "#ff8a3d", fillOpacity: 0.3 })
+  const routeCasing = L.polyline([], { color: "#14110f", weight: 6, opacity: 0.7 }).addTo(map);
+  const routeDashes = L.polyline([], { color: "#ffffff", weight: 3, dashArray: "6 6" }).addTo(map);
+  const goalMarker = L.circleMarker([0, 0], { radius: 7, color: "#ff8a3d", fillOpacity: 0.3 })
     .bindTooltip("Science target").addTo(map);
+  function drawRoute(points) {
+    route = points;
+    const line = points.map(([x, y]) => [y, x]);
+    routeCasing.setLatLngs(line);
+    routeDashes.setLatLngs(line);
+    const goal = points[points.length - 1];
+    goalMarker.setLatLng([goal[1], goal[0]]);
+  }
+  drawRoute(route);
+
+  let socket = null;
+  map.on("click", (event) => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    const x = event.latlng.lng, y = event.latlng.lat;
+    if (x < 0 || y < 0 || x > size || y > size) return;
+    socket.send(JSON.stringify({ goal: { x, y } }));
+    goalMarker.setLatLng([y, x]);
+    $("plan-status").textContent = "Planning…";
+  });
 
   const astronautTrail = L.polyline([], { color: "#5fd4ff", weight: 2, opacity: 0.8 }).addTo(map);
   const roverTrail = L.polyline([], { color: "#ffd23d", weight: 2, opacity: 0.6 }).addTo(map);
@@ -158,8 +177,26 @@ async function main() {
     if (points.length > TRAIL_POINTS) trail.setLatLngs(points.slice(-TRAIL_POINTS));
   }
 
+  function showPlan(summary) {
+    if (!summary) return;
+    if (!summary.ok) {
+      $("plan-status").textContent = "No safe route to that point";
+      return;
+    }
+    $("plan-status").textContent = "Route from the planner";
+    $("plan-length").textContent = `${fmt(summary.length_m)} m`;
+    $("plan-time").textContent = `${fmt(summary.walk_time_s / 60, 1)} min`;
+    $("plan-dose").textContent = `${fmt(summary.dose_uSv, 1)} µSv`;
+  }
+
   let lastTime = null;
   function show(message) {
+    if (message.route?.version && message.route.version !== routeVersion) {
+      routeVersion = message.route.version;
+      fetch("/route").then((r) => r.json()).then((points) => { if (points.length > 1) drawRoute(points); });
+    }
+    showPlan(message.route?.summary);
+
     for (const [variant, version] of Object.entries(message.costmaps ?? {})) {
       if (costVersions[variant] !== version) {
         costVersions[variant] = version;
@@ -218,7 +255,7 @@ async function main() {
   }
 
   function connect() {
-    const socket = new WebSocket(`ws://${location.host}/ws`);
+    socket = new WebSocket(`ws://${location.host}/ws`);
     socket.onmessage = (event) => show(JSON.parse(event.data));
     socket.onclose = () => {
       $("link").className = "pill offline";
