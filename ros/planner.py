@@ -9,7 +9,6 @@ Plans when it starts (from the start and goal parameters), when a new goal
 arrives (from the astronaut's current position) and when the cost map changes.
 """
 
-import heapq
 import json
 import math
 from pathlib import Path as FilePath
@@ -22,10 +21,11 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
+from cost_model import astar, coarsen, nearest_free
+
 ROOT = FilePath(__file__).resolve().parents[1]
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=ReliabilityPolicy.RELIABLE)
-NEIGHBOURS = [(dy, dx, math.hypot(dy, dx)) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx]
 
 
 def grid_values(msg):
@@ -33,56 +33,6 @@ def grid_values(msg):
     return data.reshape(msg.info.height, msg.info.width)
 
 
-def coarsen(values, factor, reduce):
-    """Merge factor x factor blocks; the edge that does not fill a block is dropped."""
-    ny, nx = (s // factor for s in values.shape)
-    blocks = values[:ny * factor, :nx * factor].reshape(ny, factor, nx, factor)
-    return reduce(blocks, axis=(1, 3))
-
-
-def nearest_free(cost, cell, radius=10):
-    """The cell itself if it is passable, else the closest passable one nearby."""
-    y, x = cell
-    best = None
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            iy, ix = y + dy, x + dx
-            if 0 <= iy < cost.shape[0] and 0 <= ix < cost.shape[1] and cost[iy, ix] < 100:
-                d = math.hypot(dy, dx)
-                if best is None or d < best[0]:
-                    best = (d, (iy, ix))
-    return best[1] if best else None
-
-
-def astar(cost, start, goal, cost_scale):
-    """Cheapest 8-connected path; a step costs its length times (1 + cost / cost_scale)."""
-    ny, nx = cost.shape
-    best = {start: 0.0}
-    parent = {}
-    frontier = [(0.0, start)]
-    while frontier:
-        _, cell = heapq.heappop(frontier)
-        if cell == goal:
-            path = [cell]
-            while cell in parent:
-                cell = parent[cell]
-                path.append(cell)
-            return path[::-1]
-        base = best[cell]
-        for dy, dx, length in NEIGHBOURS:
-            iy, ix = cell[0] + dy, cell[1] + dx
-            if not (0 <= iy < ny and 0 <= ix < nx):
-                continue
-            c = cost[iy, ix]
-            if c >= 100:
-                continue
-            new = base + length * (1.0 + c / cost_scale)
-            nxt = (iy, ix)
-            if new < best.get(nxt, math.inf):
-                best[nxt] = new
-                parent[nxt] = cell
-                heapq.heappush(frontier, (new + math.hypot(goal[0] - iy, goal[1] - ix), nxt))
-    return None
 
 
 class Planner(Node):

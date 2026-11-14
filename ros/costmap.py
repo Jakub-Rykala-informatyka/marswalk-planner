@@ -20,6 +20,8 @@ from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 
+from cost_model import DEFAULTS, cost
+
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=ReliabilityPolicy.RELIABLE)
 
@@ -27,33 +29,12 @@ LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
 SLOPE_FULL_DEG = 45.0
 ROUGHNESS_FULL_M = 1.0
 
-# variant: {parameter: default}. Assumptions to tune, not measured limits.
-DEFAULTS = {
-    # Walking in a suit: easy up to about 15 deg, forbidden from 25 deg
-    "walk": {"max_slope_deg": 25.0, "comfort_slope_deg": 15.0, "slope_weight": 70.0,
-             "max_roughness_m": 2.0, "roughness_weight": 15.0, "dose_weight": 10.0},
-    # Pressurised rover: gentler slopes, no boulder fields, cabin shields the crew
-    "rover": {"max_slope_deg": 15.0, "comfort_slope_deg": 8.0, "slope_weight": 70.0,
-              "max_roughness_m": 1.0, "roughness_weight": 25.0, "dose_weight": 0.0},
-}
 LAYERS = ("slope", "roughness", "dose_rate")
 
 
 def grid_values(msg):
     data = np.frombuffer(bytes(np.array(msg.data, dtype=np.int8)), dtype=np.int8)
     return data.reshape(msg.info.height, msg.info.width).astype(np.float32)
-
-
-def cost(slope_deg, roughness_m, dose_share, p):
-    """Cost 0..100 per cell; dose_share is the dose rate as a share of open ground."""
-    over = np.clip((slope_deg - p["comfort_slope_deg"]) / (p["max_slope_deg"] - p["comfort_slope_deg"]), 0, 1)
-    gentle = np.clip(slope_deg / p["comfort_slope_deg"], 0, 1)
-    value = (p["slope_weight"] * (0.2 * gentle + 0.8 * over ** 2)
-             + p["roughness_weight"] * np.clip(roughness_m / p["max_roughness_m"], 0, 1)
-             + p["dose_weight"] * dose_share)
-    value = np.clip(np.rint(value), 0, 99)
-    value[(slope_deg >= p["max_slope_deg"]) | (roughness_m >= p["max_roughness_m"])] = 100
-    return value.astype(np.int8)
 
 
 class Costmap(Node):
