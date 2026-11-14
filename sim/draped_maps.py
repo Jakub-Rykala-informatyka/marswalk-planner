@@ -4,11 +4,18 @@ The terrain mesh (data/terrain/mars_gale.usd) keeps its relief; only its texture
 swapped for each layer. The background is removed with the depth buffer (no terrain
 hit = transparent), so the PNGs have an alpha channel and no sky.
 Writes media/screens/layers/draped/<name>.png. Run with Isaac Sim's python.sh.
+With --slide it drapes the maps of the cost map slide (media/slides/textures/, written by
+sim/costmap_slide.py) from a higher camera and writes media/slides/draped/<name>.png.
 """
 
+import argparse
 from pathlib import Path
 
 from isaacsim import SimulationApp
+
+parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+parser.add_argument("--slide", action="store_true", help="drape the cost map slide maps instead of the NASA layers")
+args = parser.parse_args()
 
 simulation_app = SimulationApp({"headless": False, "width": 1600, "height": 1200})
 
@@ -30,7 +37,12 @@ MAPS = {
     "dose_shelter": LAYERS / "dose_shelter.png",
     "dose_rate": LAYERS / "dose_rate.png",
 }
+if args.slide:
+    TEXTURES = ROOT / "media" / "slides" / "textures"
+    MAPS = {path.stem: path for path in sorted(TEXTURES.glob("*.png"))}
+    OUT = ROOT / "media" / "slides" / "draped"
 WIDTH, HEIGHT = 1600, 1200
+CROP_MARGIN = 24
 
 
 def set_texture(stage, path):
@@ -59,6 +71,8 @@ def main():
     camera.CreateFocalLengthAttr(16.0)
     camera.CreateClippingRangeAttr(Gf.Vec2f(5.0, 40000.0))
     eye, centre = Gf.Vec3d(-1250.0, -1380.0, 800.0), Gf.Vec3d(1036.0, 1036.0, 150.0)
+    if args.slide:  # steeper view, about 30 degrees down, so the small slide tiles still read as maps
+        eye = Gf.Vec3d(-1250.0, -1380.0, 2100.0)
     view = Gf.Matrix4d().SetLookAt(eye, centre, Gf.Vec3d(0, 0, 1))
     UsdGeom.Xformable(camera).AddTransformOp().Set(view.GetInverse())
 
@@ -81,7 +95,12 @@ def main():
         colour = np.asarray(rgb.get_data())[..., :3]
         distance = np.asarray(depth.get_data()).reshape(colour.shape[:2])
         alpha = (np.isfinite(distance) & (distance > 0) & (distance < 1e6)).astype(np.uint8) * 255
-        Image.fromarray(np.dstack([colour, alpha])).save(OUT / f"{name}.png")
+        ys, xs = np.nonzero(alpha)
+        if xs.min() == 0 or ys.min() == 0 or xs.max() == WIDTH - 1 or ys.max() == HEIGHT - 1:
+            print(f"warning: {name} touches the frame edge, part of the terrain is cut off")
+        box = (max(xs.min() - CROP_MARGIN, 0), max(ys.min() - CROP_MARGIN, 0),
+               min(xs.max() + CROP_MARGIN + 1, WIDTH), min(ys.max() + CROP_MARGIN + 1, HEIGHT))
+        Image.fromarray(np.dstack([colour, alpha])).crop(box).save(OUT / f"{name}.png")
         print(f"saved {name}.png, terrain covers {np.mean(alpha > 0):.0%} of the frame")
 
     simulation_app.close()

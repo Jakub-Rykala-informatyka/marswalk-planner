@@ -7,22 +7,30 @@ tilted map tiles joined by arrows:
   1 NASA data (dose, roughness, slope) -> 2 cost of each factor -> 3 cost map -> 4 A* route
 
 Writes media/slides/costmap_pipeline.png (1920 x 1080). Plain Python: numpy and Pillow.
+
+With --style isaac the tiles are the same maps draped on the 3D terrain in Isaac Sim:
+  python sim/costmap_slide.py                 # also writes the map textures
+  python.sh sim/draped_maps.py --slide        # renders them on the terrain
+  python sim/costmap_slide.py --style isaac   # media/slides/costmap_pipeline_3d.png
 """
 
+import argparse
 import json
 import math
 import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ros"))
 from cost_model import DEFAULTS, astar, coarsen, cost, nearest_free  # noqa: E402
 
 LAYERS = ROOT / "data" / "layers"
-OUT = ROOT / "media" / "slides" / "costmap_pipeline.png"
+SLIDES = ROOT / "media" / "slides"
+TEXTURES = SLIDES / "textures"  # top-down maps, north up, for draped_maps.py --slide
+DRAPED = SLIDES / "draped"  # the same maps rendered on the terrain in Isaac Sim
 W, H = 1920, 1080
 TEX = 512  # texture size of each tile before it is tilted
 
@@ -78,6 +86,7 @@ class Tile:
 
     def __init__(self, x, y, width, depth, skew):
         self.x, self.y, self.width, self.depth, self.skew = x, y, width, depth, skew
+        self.drawn = None  # (x, y, w, h) of a pasted render, which may be narrower than the tile
 
     @property
     def corners(self):  # NW, NE, SE, SW on the slide
@@ -86,10 +95,16 @@ class Tile:
 
     @property
     def left(self):
+        if self.drawn:
+            x, y, w, h = self.drawn
+            return (x, y + h / 2)
         return (self.x + self.skew / 2, self.y + self.depth / 2)
 
     @property
     def right(self):
+        if self.drawn:
+            x, y, w, h = self.drawn
+            return (x + w, y + h / 2)
         return (self.x + self.width + self.skew / 2, self.y + self.depth / 2)
 
     @property
@@ -111,6 +126,22 @@ class Tile:
         slide.alpha_composite(shadow)
         slide.alpha_composite(warped)
         ImageDraw.Draw(slide).polygon([tuple(p) for p in self.corners], outline=(255, 255, 255, 70), width=1)
+
+    def paste_render(self, slide, path):
+        """An Isaac Sim render with a transparent background, fitted into the tile's box."""
+        if not path.exists():
+            raise SystemExit(f"{path.relative_to(ROOT)} is missing: run python.sh sim/draped_maps.py --slide first")
+        image = Image.open(path).convert("RGBA")
+        box_w, box_h = self.width + self.skew, self.depth
+        scale = min(box_w / image.width, box_h / image.height)
+        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+        x = round(self.x + (box_w - image.width) / 2)
+        y = round(self.y + (box_h - image.height) / 2)
+        shadow = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        shadow.putalpha(image.getchannel("A").point(lambda a: a * 110 // 255).filter(ImageFilter.GaussianBlur(6)))
+        slide.alpha_composite(shadow, (x + 8, y + 12))
+        slide.alpha_composite(image, (x, y))
+        self.drawn = (x, y, image.width, image.height)
 
 
 def arrow(draw, start, end, colour=INK, width=4, head=16):
@@ -187,6 +218,11 @@ def compute():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--style", choices=["flat", "isaac"], default="flat",
+                        help="flat tilted maps, or the Isaac Sim renders on the 3D terrain")
+    args = parser.parse_args()
+    out = SLIDES / ("costmap_pipeline_3d.png" if args.style == "isaac" else "costmap_pipeline.png")
     raw, terms, total, points, cell, stats, p = compute()
     n = total.shape[0]
 
@@ -197,8 +233,21 @@ def main():
                          "The same code runs live in our ROS 2 cost map and planner nodes.",
               font=font(21), fill=MUTED)
 
-    tw, td, sk = 330, 128, 70  # tile width, depth and skew
+    def place(tile, name, image):
+        TEXTURES.mkdir(parents=True, exist_ok=True)
+        image.save(TEXTURES / f"{name}.png")
+        if args.style == "flat":
+            tile.paste(slide, image)
+        else:
+            tile.paste_render(slide, DRAPED / f"{name}.png")
+
+    # Tile width, depth and skew; the Isaac renders are taller than the flat tiles
+    tw, td, sk = 330, 128, 70
     rows = [250, 470, 690]
+    bd3, row4, bd4 = 170, 690, 170
+    if args.style == "isaac":
+        td, rows = 140, [230, 460, 690]
+        bd3, row4, bd4 = 200, 680, 230
     col1, col2 = 70, 600
 
     # 1. NASA data, top to bottom: radiation, surface, terrain (as in the sketch)
@@ -222,27 +271,28 @@ def main():
     step_header(draw, col2, 186, 2, "Cost of each factor")
 
     tiles2 = []
-    for row, (image, title, detail), (share, banned, ftitle, fdetail) in zip(rows, inputs, factors):
+    for name, row, (image, title, detail), (share, banned, ftitle, fdetail) in zip(
+            ("dose", "roughness", "slope"), rows, inputs, factors):
         t1 = Tile(col1, row, tw, td, sk)
-        t1.paste(slide, image)
+        place(t1, f"in_{name}", image)
         label(draw, (col1, row + td + 10), title, detail)
 
         rgb = ramp(share)
         if banned is not None:
             rgb[banned] = KEEP_OUT
         t2 = Tile(col2, row, tw, td, sk)
-        t2.paste(slide, grid_to_image(rgb))
+        place(t2, f"cost_{name}", grid_to_image(rgb))
         label(draw, (col2, row + td + 10), ftitle, fdetail)
         tiles2.append(t2)
         arrow(draw, (t1.right[0] + 30, t1.right[1]), (t2.left[0] - 20, t2.left[1]))
 
     # 3. Cost map: the weighted sum, with keep-out cells in red
-    col3, row3, bw, bd, bsk = 1070, 240, 400, 170, 90
+    col3, row3, bw, bd, bsk = 1070, 240, 400, bd3, 90
     step_header(draw, col3, 186, 3, "Cost map")
     rgb = ramp(np.minimum(total, 99) / 99)
     rgb[total == 100] = KEEP_OUT
     cost_tile = Tile(col3, row3, bw, bd, bsk)
-    cost_tile.paste(slide, grid_to_image(rgb))
+    place(cost_tile, "cost_map", grid_to_image(rgb))
     for t2 in tiles2:
         arrow(draw, (t2.right[0] + 30, t2.right[1]), (cost_tile.left[0] - 22, cost_tile.left[1]))
     label(draw, (col3, row3 + bd + 12), "Sum per cell, 0–99",
@@ -258,7 +308,6 @@ def main():
     draw.text((key_x + key_w + 53, key_y + 18), "no go", font=font(16), fill=MUTED, anchor="ma")
 
     # 4. Route: A* over the cost map, drawn on the orthophoto
-    row4 = 690
     step_header(draw, col3, 626, 4, "A* route")
     ortho = Image.open(ROOT / "media/screens/layers/flat/ortofoto.png").convert("RGBA").resize((n, n), Image.BICUBIC)
     no_go = np.zeros((n, n, 4), np.uint8)
@@ -269,10 +318,10 @@ def main():
     route_draw.line(px, fill=ACCENT + (255,), width=30, joint="curve")
     for (x, y), colour in ((px[0], (255, 255, 255)), (px[-1], ACCENT)):
         route_draw.ellipse([x - 42, y - 42, x + 42, y + 42], fill=colour + (255,), outline=BG + (255,), width=10)
-    route_tile = Tile(col3, row4, bw, bd, bsk)
-    route_tile.paste(slide, ortho)
+    route_tile = Tile(col3, row4, bw, bd4, bsk)
+    place(route_tile, "route", ortho)
     arrow(draw, (key_x + key_w / 2 + 60, key_y + 48), (key_x + key_w / 2 + 60, row4 - 70))
-    label(draw, (col3, row4 + bd + 12), "Cheapest path, 8 neighbours",
+    label(draw, (col3, row4 + bd4 + 12), "Cheapest path, 8 neighbours",
           "a step costs its length × (1 + cost / 25)")
 
     # Route numbers and where the route goes next
@@ -298,9 +347,9 @@ def main():
     draw.text((70, 1050), "Weights and limits are our assumptions. Dose is a model from RAD, "
                           "not a measurement at each place.", font=font(16), fill=MUTED)
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    slide.convert("RGB").save(OUT, optimize=True)
-    print(f"saved {OUT.relative_to(ROOT)}: route {stats['length']:.0f} m, {stats['minutes']:.0f} min, "
+    out.parent.mkdir(parents=True, exist_ok=True)
+    slide.convert("RGB").save(out, optimize=True)
+    print(f"saved {out.relative_to(ROOT)}: route {stats['length']:.0f} m, {stats['minutes']:.0f} min, "
           f"{stats['dose']:.1f} uSv, keep out {stats['keep_out']:.0%}, max cost {stats['max_cost']}")
 
 
