@@ -16,12 +16,17 @@ from pathlib import Path
 import rclpy
 from aiohttp import WSMsgType, web
 from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import OccupancyGrid
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rosgraph_msgs.msg import Clock
 from std_msgs.msg import Float32, String
 
 ROOT = Path(__file__).resolve().parents[1]
 STALE_AFTER = 2.0  # s without a pose before the dashboard shows the source as offline
+COSTMAPS = ("walk", "rover")
+LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                     reliability=ReliabilityPolicy.RELIABLE)
 
 
 def pose_dict(msg):
@@ -44,12 +49,16 @@ class Telemetry(Node):
         self.dose_rate = None
         self.dose = None
         self.last_pose_wall = 0.0
+        self.costmaps = {}  # variant: (version, width, height, cell bytes)
         self.create_subscription(Clock, "/clock", self.on_clock, 10)
         self.create_subscription(PoseStamped, "/astronaut/pose", self.on_astronaut, 10)
         self.create_subscription(PoseStamped, "/rover/pose", self.on_rover, 10)
         self.create_subscription(String, "/rover/state", self.on_rover_state, 10)
         self.create_subscription(Float32, "/astronaut/dose_rate", self.on_dose_rate, 10)
         self.create_subscription(Float32, "/astronaut/dose", self.on_dose, 10)
+        for variant in COSTMAPS:
+            self.create_subscription(OccupancyGrid, f"/costmap/{variant}",
+                                     lambda msg, v=variant: self.on_costmap(v, msg), LATCHED)
 
     def on_clock(self, msg):
         self.sim_time = msg.clock.sec + msg.clock.nanosec * 1e-9
@@ -70,10 +79,16 @@ class Telemetry(Node):
     def on_dose(self, msg):
         self.dose = msg.data
 
+    def on_costmap(self, variant, msg):
+        version = self.costmaps.get(variant, (0,))[0] + 1
+        cells = bytes(array_bytes(msg.data))
+        self.costmaps[variant] = (version, msg.info.width, msg.info.height, cells)
+
     def snapshot(self):
         age = self.get_clock().now().nanoseconds * 1e-9 - self.last_pose_wall
         live = self.astronaut is not None and age < STALE_AFTER
-        message = {"live": live, "t": self.sim_time, "astronaut": self.astronaut, "rover": None}
+        message = {"live": live, "t": self.sim_time, "astronaut": self.astronaut, "rover": None,
+                   "costmaps": {variant: entry[0] for variant, entry in self.costmaps.items()}}
         if self.dose_rate is not None:
             message["suit"] = {"dose_rate_uSv_h": round(self.dose_rate, 2), "dose_uSv": round(self.dose, 3)}
         if self.rover:
@@ -82,6 +97,21 @@ class Telemetry(Node):
             message["rover_distance_m"] = round(
                 math.hypot(self.rover["x"] - self.astronaut["x"], self.rover["y"] - self.astronaut["y"]), 1)
         return message
+
+
+def array_bytes(data):
+    """OccupancyGrid data as raw bytes, whether rclpy gives an array or a list."""
+    return data.tobytes() if hasattr(data, "tobytes") else bytes(v & 0xFF for v in data)
+
+
+async def costmap(request):
+    """Raw cost map cells, one byte each, row 0 at the south edge."""
+    entry = request.app["telemetry"].costmaps.get(request.match_info["variant"])
+    if entry is None:
+        raise web.HTTPNotFound()
+    _, width, height, cells = entry
+    return web.Response(body=cells, content_type="application/octet-stream",
+                        headers={"X-Width": str(width), "X-Height": str(height), "Cache-Control": "no-store"})
 
 
 async def websocket(request):
@@ -134,6 +164,7 @@ def main():
     app.on_startup.append(start_broadcast)
     app.router.add_get("/", index)
     app.router.add_get("/ws", websocket)
+    app.router.add_get("/costmap/{variant}", costmap)
     app.router.add_static("/app", ROOT / "app")
     app.router.add_static("/data", ROOT / "data")
     web.run_app(app, port=args.port, print=lambda *_: print(f"dashboard on http://localhost:{args.port}"))

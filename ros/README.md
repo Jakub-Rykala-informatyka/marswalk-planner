@@ -24,6 +24,7 @@ for another route.
 | `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | – | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
 | `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate` |
 | `dose_monitor` | `ros/dose_monitor.py` | `/nasa/dose_rate`, `/astronaut/pose` | `/astronaut/dose_rate`, `/astronaut/dose` |
+| `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
 | `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser |
 
 ## NASA layer topics
@@ -42,6 +43,30 @@ south-west of the map origin. Values are 0..100:
 
 The dose model is a simplification (cosmic rays only, scaled by open sky); its
 limits are written in `data/meta.json` under `dose_model`.
+
+## Cost maps
+
+`/costmap/walk` and `/costmap/rover` are latched `nav_msgs/OccupancyGrid`s on the
+same grid as `/nasa/*`: 0 = free, 1..99 = harder going, 100 = keep out (the
+Nav2 convention). Each cell adds a slope term (mild below the comfort slope,
+growing fast towards the limit), a roughness term and a dose term; a cell at
+or over the slope or roughness limit is 100.
+
+Defaults are assumptions to tune, not measured limits:
+
+| Parameter | `walk` | `rover` |
+| --- | --- | --- |
+| `max_slope_deg` | 25 | 15 |
+| `comfort_slope_deg` | 15 | 8 |
+| `max_roughness_m` | 2.0 | 1.0 |
+| `slope_weight` / `roughness_weight` / `dose_weight` | 70 / 15 / 10 | 70 / 25 / 0 |
+
+The rover has no dose weight because the cabin shields the crew. Change a
+value live and both maps are recomputed and redrawn on the dashboard:
+
+```bash
+./scripts/ros_shell.sh ros2 param set /costmap walk.max_slope_deg 20.0
+```
 
 ## Topics published by the simulation
 
@@ -67,11 +92,11 @@ route files, so a pose indexes the layers directly:
 
 ## Not here yet
 
-Suit sensor nodes for oxygen and battery, the cost map and the planner.
+Suit sensor nodes for oxygen and battery, and the planner on top of the cost maps.
 
 ## Dashboard
 
-`./scripts/run_dashboard.sh` starts `nasa_layers`, `dose_monitor` and
+`./scripts/run_dashboard.sh` starts `nasa_layers`, `dose_monitor`, `costmap` and
 `ros/telemetry_server.py` in one container. The telemetry server serves the app
 on http://localhost:8080 and streams the topics above to the browser over
 WebSocket (`/ws`), five messages per second.

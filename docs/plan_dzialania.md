@@ -34,6 +34,7 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Trzeci rodzaj danych: dawka promieniowania z RAD × widoczność nieba | gotowe |
 | Warstwy NASA jako tematy ROS `/nasa/*` | gotowe |
 | Dawka astronauty na żywo (`/astronaut/dose_rate`, `/astronaut/dose`) | gotowe |
+| Mapy kosztów `/costmap/walk` i `/costmap/rover` z warstw `/nasa/*`, parametry ROS | gotowe |
 
 Uruchomienie:
 
@@ -45,7 +46,7 @@ Uruchomienie:
 ### Co dalej, w kolejności
 
 1. ~~Trzeci rodzaj danych~~: zrobione. Mamy wysokości i zdjęcia z HiRISE oraz promieniowanie z RAD.
-2. **Mapa kosztów na tematach ROS.** Warstwy `/nasa/*` już są publikowane. Brakuje węzła, który je subskrybuje i publikuje `/costmap`. Dwa warianty: pieszo i łazikiem.
+2. ~~Mapa kosztów na tematach ROS~~: zrobione. Węzeł `costmap` subskrybuje `/nasa/*` i publikuje `/costmap/walk` i `/costmap/rover`; wagi i limity zmienia się parametrami ROS na żywo.
 3. **Planer na tematach ROS.** Subskrybuje `/costmap`, pozycję i cel, publikuje `/route`. Symulacja i dashboard biorą trasę z tematu zamiast z pliku.
 4. **Budżet wyjścia.** Tlen, dawka i zapas na powrót do łazika, pokazane na dashboardzie i w HUD-zie.
 5. **HUD.** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard.

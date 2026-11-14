@@ -69,6 +69,51 @@ async function main() {
     $("layers").append(label);
   }
 
+  // Cost maps arrive from ROS 2 through the telemetry server and are drawn on a canvas
+  const costOverlays = {};
+  const costVersions = {};
+  for (const [variant, name] of [["walk", "Cost: walking"], ["rover", "Cost: crew rover"]]) {
+    const overlay = L.imageOverlay("data:,", bounds, { opacity: 0.7 });
+    costOverlays[variant] = overlay;
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox"><span>${name}</span><input type="range" min="0" max="1" step="0.05" value="0.7">`;
+    const [toggle, slider] = label.querySelectorAll("input");
+    toggle.addEventListener("change", () => {
+      toggle.checked ? overlay.addTo(map) : overlay.remove();
+      $("cost-legend").hidden = !Object.values(costOverlays).some((o) => map.hasLayer(o));
+    });
+    slider.addEventListener("input", () => overlay.setOpacity(Number(slider.value)));
+    $("layers").append(label);
+  }
+
+  async function loadCostmap(variant) {
+    const response = await fetch(`/costmap/${variant}`);
+    if (!response.ok) return;
+    const width = Number(response.headers.get("X-Width"));
+    const height = Number(response.headers.get("X-Height"));
+    const cells = new Int8Array(await response.arrayBuffer());
+    const canvas = Object.assign(document.createElement("canvas"), { width, height });
+    const context = canvas.getContext("2d");
+    const image = context.createImageData(width, height);
+    for (let row = 0; row < height; row++) {
+      const source = row * width, target = (height - 1 - row) * width; // grid row 0 is south
+      for (let col = 0; col < width; col++) {
+        const cost = cells[source + col];
+        const pixel = 4 * (target + col);
+        if (cost >= 100) {
+          image.data.set([200, 20, 60, 230], pixel);
+        } else {
+          // Low costs stay clear so the terrain shows through, then yellow to orange
+          const t = cost / 99;
+          const alpha = 200 * Math.sqrt(Math.max(0, (t - 0.15) / 0.85));
+          image.data.set([255, 230 - 130 * t, 40, Math.round(alpha)], pixel);
+        }
+      }
+    }
+    context.putImageData(image, 0, 0);
+    costOverlays[variant].setUrl(canvas.toDataURL());
+  }
+
   const routeFile = await (await fetch("/data/route_example.geojson")).json();
   const route = routeFile.features[0].geometry.coordinates;
   // Dark casing under the dashes keeps the route readable on the orange terrain
@@ -115,6 +160,13 @@ async function main() {
 
   let lastTime = null;
   function show(message) {
+    for (const [variant, version] of Object.entries(message.costmaps ?? {})) {
+      if (costVersions[variant] !== version) {
+        costVersions[variant] = version;
+        loadCostmap(variant);
+      }
+    }
+
     // Simulation time going backwards means a new walk: drop the old trails
     if (message.t !== null && lastTime !== null && message.t < lastTime - 1) {
       astronautTrail.setLatLngs([]);
