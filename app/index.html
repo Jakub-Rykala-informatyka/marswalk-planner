@@ -42,6 +42,9 @@
           <span id="hud-margin">O₂ margin –</span>
           <span id="hud-rover">Rover –</span>
         </div>
+        <div class="hud hud-top">
+          <span id="hud-task">–</span>
+        </div>
         <p class="no-signal" id="nosignal-astronaut">No signal</p>
       </div>
       <figcaption><span class="dot astronaut"></span>Helmet camera · <span id="age-astronaut">–</span></figcaption>
@@ -75,6 +78,7 @@
       <button type="button" id="mission-show">Show on 3D map</button>
       <span id="mission-sent"></span>
     </div>
+    <div id="mission-live" class="mission-live" hidden></div>
     <div id="mission-body"><p class="note">Waiting for /mission/plan from ROS 2.</p></div>
   </div>
 

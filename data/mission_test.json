@@ -1,0 +1,46 @@
+{
+  "id": "test-short",
+  "name": "Short test mission (2 targets near the crew rover)",
+  "objective": "Check the mission walk in the simulation: a stop for astronaut work and an arm sample on a steep spot.",
+  "background": "Boxwork is a web of ridges left where groundwater deposited minerals in rock fractures and the softer rock around them eroded. NASA's HiRISE camera imaged boxwork on lower Mount Sharp (PIA26306, taken on 10 December 2006, the same HiRISE observation as this terrain patch) and the Curiosity rover studied boxwork ridges up close in 2025. Minerals in the ridges crystallised underground with liquid water, so they may record a habitable environment.",
+  "site_note": "Test targets chosen for their slope, not for science.",
+  "start": {
+    "name": "Crew rover parking",
+    "x": 1141.0,
+    "y": 834.0
+  },
+  "return_to_start": true,
+  "targets": [
+    {
+      "id": "T1",
+      "name": "Test: flat ground",
+      "x": 1206.0,
+      "y": 787.1,
+      "why": "Flat spot for an astronaut stop.",
+      "tasks": [
+        "Hammer sample"
+      ],
+      "tools": [
+        "geo_tools",
+        "sample_box"
+      ],
+      "minutes": 10,
+      "priority": 1
+    },
+    {
+      "id": "T2",
+      "name": "Test: steep slope",
+      "x": 1197.9,
+      "y": 853.9,
+      "why": "23 degree slope: the arm takes the sample.",
+      "tasks": [
+        "Arm sample"
+      ],
+      "tools": [
+        "sample_box"
+      ],
+      "minutes": 20,
+      "priority": 1
+    }
+  ]
+}

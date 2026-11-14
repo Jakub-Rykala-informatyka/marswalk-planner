@@ -49,7 +49,8 @@ class MissionPlanner(Node):
         self.declare_parameter("reserve_min", 30.0)
         self.declare_parameter("coarse", 2)
         self.declare_parameter("cost_scale", 25.0)
-        self.mission = json.loads(MISSION.read_text())
+        self.declare_parameter("mission_file", str(MISSION))  # e.g. data/mission_test.json for a short check
+        self.mission = json.loads(FilePath(self.get_parameter("mission_file").value).read_text())
         meta = json.loads((ROOT / "data" / "meta.json").read_text())
         self.full_dose = meta["dose_model"]["open_ground_uSv_per_h"]
         self.slope = np.load(ROOT / "data" / "layers" / "slope.npy")
@@ -74,6 +75,7 @@ class MissionPlanner(Node):
 
     def on_start(self, _msg):
         if self.route is not None:
+            self.route.header.stamp = self.get_clock().now().to_msg()  # newer than any route the sim holds
             self.walk_route_pub.publish(self.route)
             self.get_logger().info("mission route sent to /route")
 

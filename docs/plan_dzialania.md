@@ -42,6 +42,7 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Lidar na łaziku (`/rover/points`) nałożony na widok 3D | gotowe |
 | Kamery kasku i łazika w ROS 2, druga zakładka dashboardu z nakładką HUD | gotowe |
 | Ramię Unitree Z1 na łaziku, zdalne sterowanie przez ROS 2 (`/rover/arm/command`), suwaki i pozycje w dashboardzie, kamera operatora | gotowe |
+| Symulacja misji: przystanki przy celach na czas pracy, ramię pobiera próbkę przy celu na zboczu, postęp na dashboardzie (`/mission/progress`) | gotowe |
 | Misja „Boxwork EVA 1”: cel naukowy, 4 cele, wykonawcy, kolejność, tlen, dawka, narzędzia (`/mission/plan`), zakładka „Mission” | gotowe |
 | Zakładka „Rover planner”: 3 łaziki, osprzęt z ilościami, bilans, podgląd 3D, `/rover/config` | gotowe |
 

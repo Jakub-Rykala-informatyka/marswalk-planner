@@ -206,6 +206,37 @@ four targets with tasks, tools, time on site and priority. It subscribes to
 It publishes `/mission/plan` (JSON, latched) and `/mission/route` (`nav_msgs/Path`,
 latched). `std_msgs/Empty` on `/mission/start` (the "Start mission walk"
 button) republishes the mission route on `/route`, so the simulation walks it.
+
+### Mission walk in the simulation
+
+The simulation subscribes to `/mission/plan` and turns every target on the
+route into a stop (`sim/mission_walk.py`):
+
+- at an astronaut target the astronaut stands for the target's work time,
+- at an arm target (too steep for the crew) the astronaut waits at the safe
+  stop until the rover is within 7 m, then the arm runs its sample sequence:
+  reach out, down to the ground, over the sample box, stow (arm commands from
+  the dashboard are ignored while it runs),
+- after the last target the astronaut walks back to the crew rover parking.
+
+Work times are scaled for the demo: `--work-scale` simulated seconds per
+minute of work (default 2), and `--walk-speed` sets the astronaut's pace
+(default 0.8 m/s; the rover speeds up to keep pace, at most 2.5 m/s). Progress
+goes out on `/mission/progress` (`std_msgs/String`, JSON: phase, target,
+work time left, arm step) and shows in the Mission tab and the helmet HUD
+overlay.
+
+```bash
+MISSION=data/mission_test.json ./scripts/run_dashboard.sh   # short 2-target mission; omit MISSION for Boxwork EVA 1
+./scripts/run_sim.sh --walk-speed 1.2 --work-scale 1.0
+./scripts/ros_shell.sh ros2 topic pub --once /mission/start std_msgs/msg/Empty "{}"
+```
+
+Keep the walk at 1.2 m/s or below: the rover is capped at 1.5 m/s, faster it
+leaves the route and tips over. The Jackal carries 45 kg of ballast low in the
+chassis so the arm does not make it top-heavy. If it still tips over, or sits
+stuck on one of the terrain model's 2 m steps for 5 s, the simulation puts it
+back upright on the route and logs it.
 The dashboard's Mission tab shows the plan; the 3D map shows numbered pins and
 the mission route.
 

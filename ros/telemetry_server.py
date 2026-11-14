@@ -75,6 +75,9 @@ class Telemetry(Node):
         self.create_subscription(JointState, "/rover/arm/joint_states", self.on_arm, 10)
         self.mission = (0, None)  # version, plan
         self.create_subscription(String, "/mission/plan", self.on_mission, LATCHED)
+        self.mission_progress = None
+        self.create_subscription(String, "/mission/progress",
+                                 lambda msg: setattr(self, "mission_progress", json.loads(msg.data)), 10)
         self.mission_route = []
         self.create_subscription(RoutePath, "/mission/route", self.on_mission_route, LATCHED)
         self.create_subscription(RoutePath, "/route", self.on_route, LATCHED)
@@ -181,6 +184,7 @@ class Telemetry(Node):
                    "route": {"version": self.route[0], "summary": self.route_summary},
                    "points": self.points[0],
                    "mission": self.mission[0],
+                   "mission_progress": self.mission_progress,
                    "arm": self.arm,
                    "cameras": {name: entry[0] for name, entry in self.images.items()}}
         suit = dict(self.suit_status or {})

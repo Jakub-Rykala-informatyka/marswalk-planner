@@ -543,6 +543,34 @@ async function main() {
   let pointsLoading = false;
   let lastTime = null;
 
+  const ARM_STEPS = { forward: "reaching out", ground: "taking the sample", sample_box: "storing the sample", stow: "stowing" };
+  function showProgress(progress) {
+    const live = $("mission-live");
+    if (!progress || progress.phase === "free walk") {
+      live.hidden = true;
+      $("hud-task").textContent = progress ? "Free walk" : "–";
+      return;
+    }
+    let line, detail;
+    if (progress.phase === "waiting for rover") {
+      line = `${progress.number}. ${progress.target}: waiting for the rover arm`;
+      detail = "Target too steep for the crew: the rover's arm takes the sample";
+    } else if (progress.phase === "working") {
+      const who = progress.executor.startsWith("arm") ? `Rover arm ${ARM_STEPS[progress.arm_step] ?? "working"}` : "Astronaut working";
+      line = `${progress.number}. ${progress.target}: ${who}`;
+      detail = `${progress.work_left_s} s left of ${progress.work_minutes} min of work (demo time is sped up)`;
+    } else if (progress.phase === "walking") {
+      line = `Walking to ${progress.number}. ${progress.target}`;
+      detail = `${progress.distance_m} m to go · ${progress.done} of ${progress.stops} targets done`;
+    } else {
+      line = progress.phase === "done" ? "Mission complete" : "All targets done, returning to the crew rover";
+      detail = `${progress.done} of ${progress.stops} targets done`;
+    }
+    live.innerHTML = `${line}<small>${detail}</small>`;
+    live.hidden = false;
+    $("hud-task").textContent = line;
+  }
+
   function showPlan(summary) {
     if (!summary) return;
     if (!summary.ok) {
@@ -635,6 +663,7 @@ async function main() {
       $("progress-text").textContent = `${fmt(walked)} of ${fmt(total)} m`;
     }
     if (message.suit) showSuit(message.suit);
+    showProgress(message.mission_progress);
     updateFeeds(message.cameras);
     showArm(message.arm);
 

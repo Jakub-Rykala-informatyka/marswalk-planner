@@ -139,6 +139,13 @@ body {
 }
 .mission-actions button:first-child { background: var(--accent); border-color: var(--accent); color: #1a120d; font-weight: 600; }
 #mission-sent { color: var(--muted); font-size: 12px; }
+.mission-live {
+  margin-bottom: 12px; padding: 10px 14px; border-radius: 8px;
+  border: 1px solid var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent);
+  font-weight: 600;
+}
+.mission-live small { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; }
+.hud.hud-top { top: 0; bottom: auto; background: linear-gradient(rgba(0, 0, 0, 0.65), transparent); }
 .mission-title { font-size: 22px; margin: 4px 0 6px; }
 .objective { font-size: 15px; margin: 0 0 10px; }
 #mission details { margin-bottom: 12px; color: var(--muted); }

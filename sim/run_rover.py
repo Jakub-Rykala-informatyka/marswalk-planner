@@ -27,6 +27,10 @@ parser.add_argument("--ros", action="store_true", help="publish poses to ROS 2")
 parser.add_argument("--camera", choices=("rover", "astronaut"), default="rover", help="what the view follows")
 parser.add_argument("--record", action="store_true", help="save camera frames to media/frames/")
 parser.add_argument("--no-lidar", action="store_true", help="leave the lidar out: its beams show in camera images")
+parser.add_argument("--walk-speed", type=float, default=0.8,
+                    help="astronaut pace in m/s; 0.8 is a suited walk, more makes a quicker demo")
+parser.add_argument("--work-scale", type=float, default=2.0,
+                    help="simulated seconds per minute of work at a mission target (the demo runs fast)")
 parser.add_argument("--capture-fps", type=float, default=10.0, help="frames and ROS messages per simulated second")
 parser.add_argument("--max-time", type=float, default=900.0, help="stop after this many simulated seconds")
 args = parser.parse_args()
@@ -36,13 +40,13 @@ from isaacsim import SimulationApp
 simulation_app = SimulationApp({"headless": args.headless, "width": 1280, "height": 720})
 
 from isaacsim.core.api import World
-from isaacsim.core.prims import SingleArticulation
+from isaacsim.core.prims import SingleArticulation, SingleRigidPrim
 from isaacsim.core.utils.extensions import enable_extension
 from isaacsim.core.utils.stage import add_reference_to_stage, open_stage
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.storage.native import get_assets_root_path
 from omni.kit.viewport.utility import get_active_viewport
-from pxr import Gf, UsdGeom
+from pxr import Gf, UsdGeom, UsdPhysics
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -69,6 +73,13 @@ EYE_HEIGHT = 1.7  # m
 HEAD_START = 5.0  # m of route between rover and astronaut at the start
 FOLLOW_GAP = 4.0  # m the rover keeps behind the astronaut
 ROUTE_WAIT = 20.0  # s to wait for the planner's /route at start-up
+MAX_ROVER_SPEED = 1.5  # m/s; faster than this the Jackal leaves the route and tips over on this terrain
+UPRIGHT_LIMIT = 0.5  # the rover counts as tipped over when its up axis leans more than 60 degrees
+RIGHTING_PAUSE = 3.0  # s after setting it upright before checking again
+BALLAST_MASS = 45.0  # kg for the chassis body (the Jackal itself is about 17 kg)
+STUCK_SECONDS = 5.0  # driving but moved less than STUCK_METRES in this time: the rover is stuck
+STUCK_METRES = 0.3
+UNSTICK_AHEAD = 1.5  # m along the route the rover is moved forward when stuck
 
 
 class Route:
@@ -144,11 +155,22 @@ class RosPublisher:
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                              reliability=ReliabilityPolicy.RELIABLE)
         self.new_route = None
+        self.route_stamp = 0.0
         self.node.create_subscription(Path, "/route", self._on_route, latched)
         # Remote arm control: target angles by joint name, applied until the next command
         self.arm_targets = {}
         self.node.create_subscription(JointState, "/rover/arm/command", self._on_arm_command, 10)
         self.arm_state = self.node.create_publisher(JointState, "/rover/arm/joint_states", 10)
+        # Mission: targets and work times from mission_planner, progress back to the dashboard
+        self.mission_plan = None
+        self.node.create_subscription(String, "/mission/plan", self._on_mission_plan, latched)
+        self.mission_progress = self.node.create_publisher(String, "/mission/progress", 10)
+
+    def _on_mission_plan(self, msg):
+        self.mission_plan = json.loads(msg.data)
+
+    def publish_progress(self, progress):
+        self.mission_progress.publish(self._types[2](data=json.dumps(progress)))
 
     def _on_arm_command(self, msg):
         self.arm_targets.update(zip(msg.name, msg.position))
@@ -161,13 +183,18 @@ class RosPublisher:
         self.arm_state.publish(msg)
 
     def _on_route(self, msg):
+        # /route has two latched publishers (planner and mission_planner), and a
+        # late-joining one can deliver an old route: only a newer route counts
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         points = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
-        if len(points) > 1:
+        if len(points) > 1 and stamp > self.route_stamp:
+            self.route_stamp = stamp
             self.new_route = points
 
     def poll_route(self):
         """Route points if a new route arrived since the last call, else None."""
-        self._rclpy.spin_once(self.node, timeout_sec=0.0)
+        for _ in range(5):  # one callback per spin: route, plan and arm commands may all be waiting
+            self._rclpy.spin_once(self.node, timeout_sec=0.0)
         points, self.new_route = self.new_route, None
         return points
 
@@ -231,11 +258,17 @@ world.scene.add(rover)
 built_in_lidar = world.stage.GetPrimAtPath("/World/Rover/base_link/sick_lms1xx_lidar_frame/Lidar")
 if built_in_lidar.IsValid():
     built_in_lidar.SetActive(False)
+# Ballast low in the chassis: with the arm on top the small rover is top-heavy and
+# rolls on 10-20 degree slopes under Mars gravity (real rovers carry batteries low)
+ballast = UsdPhysics.MassAPI.Apply(world.stage.GetPrimAtPath("/World/Rover/base_link"))
+ballast.CreateMassAttr(BALLAST_MASS)
+ballast.CreateCenterOfMassAttr(Gf.Vec3f(0.0, 0.0, -0.04))
 if ros:
     from sensors import add_sensors, place_helmet_camera
 
     add_sensors(world.stage, "/World/Rover", lidar=not args.no_lidar)
 from arm import ARM_JOINTS, PRESETS, add_arm
+from mission_walk import MissionWalk
 
 add_arm(world.stage, "/World/Rover")
 
@@ -264,6 +297,7 @@ if not args.headless:
     get_active_viewport().camera_path = "/World/Cameras/Follow"
 
 world.reset()
+chassis = SingleRigidPrim("/World/Rover/base_link")
 left = [i for i, name in enumerate(rover.dof_names) if "left" in name]
 right = [i for i, name in enumerate(rover.dof_names) if "right" in name]
 wheels = left + right
@@ -287,20 +321,23 @@ if args.record:
 LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 log_file = LOG_PATH.open("w", newline="")
 log = csv.writer(log_file)
-log.writerow(["t", "astronaut_x", "astronaut_y", "rover_x", "rover_y", "rover_z", "rover_yaw_deg", "gap_m", "state"])
+log.writerow(["t", "astronaut_x", "astronaut_y", "rover_x", "rover_y", "rover_z", "rover_yaw_deg", "gap_m", "state", "up_z"])
 
 steps_per_frame = max(1, round(1.0 / (args.capture_fps * PHYSICS_DT)))
 rover_s, frame, step = 0.0, 0, 0
+stuck_since, stuck_from = None, None
+righted_at = -RIGHTING_PAUSE
 state = "following"
-walk_start, head_start = SETTLE_STEPS * PHYSICS_DT, HEAD_START
+walk = MissionWalk(route, ros.mission_plan if ros else None, args.work_scale, start_s=HEAD_START)
 while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     t = step * PHYSICS_DT
     points = ros.poll_route() if ros else None
     if points:  # new route from the planner: it starts where the astronaut stands
         route = Route(points)
-        walk_start, head_start, rover_s = t, 0.0, 0.0
-        print(f"t={t:.0f} s: new route, {route.length:.0f} m")
-    astronaut_s = min(head_start + WALK_SPEED * max(0.0, t - walk_start), route.length)
+        walk = MissionWalk(route, ros.mission_plan, args.work_scale)
+        rover_s = 0.0
+        print(f"t={t:.0f} s: new route, {route.length:.0f} m, {len(walk.stops)} mission stops")
+    astronaut_s = walk.step(t, args.walk_speed * PHYSICS_DT if step >= SETTLE_STEPS else 0.0, walk.s - rover_s)
     astronaut_xy = route.point(astronaut_s)
     astronaut_z = ground_height(heights, cell, *astronaut_xy)
     astronaut_yaw = route.heading(astronaut_s)
@@ -308,6 +345,38 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     astronaut_turn.Set(math.degrees(astronaut_yaw) + SUIT_FACING_DEG)
 
     position, orientation = rover.get_world_pose()
+    # Tilt from the chassis body itself: the asset's root prim does not always follow the physics
+    _, (w, x, y, z) = chassis.get_world_pose()
+    up_z = 1.0 - 2.0 * (x * x + y * y)
+    if up_z < UPRIGHT_LIMIT and step > SETTLE_STEPS and t > righted_at + RIGHTING_PAUSE:
+        # Tipped over: put it back on its wheels on the route, as a crew would right a small robot
+        righted_at = t
+        heading = route.heading(rover_s)
+        spot = route.point(rover_s)
+        rover.set_world_pose(position=np.array([spot[0], spot[1], ground_height(heights, cell, *spot) + 0.25]),
+                             orientation=np.array([math.cos(heading / 2), 0.0, 0.0, math.sin(heading / 2)]))
+        rover.set_linear_velocity(np.zeros(3))
+        rover.set_angular_velocity(np.zeros(3))
+        rover.set_joint_velocities(np.zeros(rover.num_dof))
+        print(f"t={t:.0f} s: rover tipped over, set upright on the route", flush=True)
+        position, orientation = rover.get_world_pose()
+    # Stuck: the small wheels cannot climb some of the 2 m steps in the terrain model
+    if state == "following" and step > SETTLE_STEPS:
+        if stuck_since is None or np.linalg.norm(position[:2] - stuck_from) > STUCK_METRES:
+            stuck_since, stuck_from = t, position[:2].copy()
+        elif t - stuck_since > STUCK_SECONDS:
+            rover_s = min(rover_s + UNSTICK_AHEAD, max(walk.s - FOLLOW_GAP, 0.0))
+            ahead = route.point(rover_s)
+            heading = route.heading(rover_s)
+            rover.set_world_pose(position=np.array([ahead[0], ahead[1], ground_height(heights, cell, *ahead) + 0.25]),
+                                 orientation=np.array([math.cos(heading / 2), 0.0, 0.0, math.sin(heading / 2)]))
+            rover.set_linear_velocity(np.zeros(3))
+            rover.set_angular_velocity(np.zeros(3))
+            print(f"t={t:.0f} s: rover stuck, moved {UNSTICK_AHEAD} m on along the route")
+            stuck_since = None
+            position, orientation = rover.get_world_pose()
+    else:
+        stuck_since = None
     yaw = yaw_of(orientation)
     rover_s = route.advance(rover_s, position[:2])
     room = astronaut_s - FOLLOW_GAP - rover_s  # how far the rover may still drive
@@ -323,8 +392,11 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
         heading_error = math.atan2(math.sin(heading_error), math.cos(heading_error))
         # Skid steering scrubs sideways, so the turn is a wheel-speed difference
         # proportional to the heading error, not the ideal differential-drive formula
-        speed = min(CRUISE_SPEED, 0.8 * room + 0.2) * max(0.0, math.cos(heading_error)) ** 2
-        skid = float(np.clip(STEER_GAIN * heading_error, -CRUISE_SPEED, CRUISE_SPEED))
+        # Keep up with a sped-up demo walk, within what the small rover can drive
+        cruise = min(max(CRUISE_SPEED, 1.15 * args.walk_speed), MAX_ROVER_SPEED)
+        speed = min(cruise, 0.8 * room + 0.2) * max(0.0, math.cos(heading_error)) ** 2
+        # Gentler turns at speed: a sharp skid turn at 2 m/s rolls the small rover
+        skid = float(np.clip(STEER_GAIN * heading_error, -1.0, 1.0)) * min(1.0, CRUISE_SPEED / max(speed, 0.1))
     if step < SETTLE_STEPS:
         speed = skid = 0.0
 
@@ -337,6 +409,9 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
             if name in ARM_JOINTS:
                 arm_target[ARM_JOINTS.index(name)] = angle
         ros.arm_targets = {}
+    pose = walk.arm_pose(t)  # a mission sample sequence overrides remote control while it runs
+    if pose:
+        arm_target[:] = PRESETS[pose]
     rover.apply_action(ArticulationAction(joint_positions=arm_target, joint_indices=np.array(arm_index)))
 
     capture = step % steps_per_frame == 0
@@ -353,9 +428,10 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
             ros.publish(t, (*astronaut_xy, astronaut_z), astronaut_yaw, position, orientation, state)
             place_helmet_camera(world.stage, (*astronaut_xy, astronaut_z + EYE_HEIGHT), astronaut_yaw)
             ros.publish_arm(ARM_JOINTS, rover.get_joint_positions()[arm_index])
+            ros.publish_progress(walk.progress(t))
         log.writerow([f"{t:.2f}", f"{astronaut_xy[0]:.2f}", f"{astronaut_xy[1]:.2f}",
                       f"{position[0]:.2f}", f"{position[1]:.2f}", f"{position[2]:.2f}",
-                      f"{math.degrees(yaw):.1f}", f"{astronaut_s - rover_s:.1f}", state])
+                      f"{math.degrees(yaw):.1f}", f"{astronaut_s - rover_s:.1f}", state, f"{up_z:.2f}"])
         log_file.flush()
     # Rendering every physics step would slow the window well below real time
     show = not args.headless and step % RENDER_EVERY == 0
