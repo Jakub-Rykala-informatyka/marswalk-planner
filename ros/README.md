@@ -28,7 +28,7 @@ for another route.
 | `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
 | `suit_monitor` | `ros/suit_monitor.py` | `/astronaut/pose`, `/nasa/slope` | `/suit/status`, `/suit/return_point` |
 | `planner` | `ros/planner.py` | `/costmap/walk`, `/nasa/dose_rate`, `/astronaut/pose`, `/goal_pose` | `/route`, `/route/summary` |
-| `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser, `/goal_pose` from map clicks |
+| `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser, `/goal_pose` from map clicks, `/rover/config` from the rover planner tab |
 
 ## NASA layer topics
 
@@ -155,6 +155,25 @@ has its own endpoints, fetched when the WebSocket message says it changed:
 | `/points` | latest lidar scan in the `map` frame, float32 x y z, at most 20 000 points |
 | `/camera/astronaut`, `/camera/rover` | latest camera frame as JPEG |
 
-The dashboard has two tabs: a 3D map (Three.js) with the terrain, layers,
-route, lidar points and markers, and the two camera feeds with a HUD overlay
-on the helmet camera.
+The dashboard has three tabs: a 3D map (Three.js) with the terrain, layers,
+route, lidar points and markers; the two camera feeds with a HUD overlay on
+the helmet camera; and the rover planner.
+
+## Rover planner
+
+The third tab picks one of the rovers in `app/rover_catalog.json` (pressurised
+crew rover, open crew rover, helper robot), fits equipment with quantities and
+checks payload, mount slots and battery endurance, with a 3D preview. All
+catalogue numbers are concept values, not specifications. "Send to ROS 2"
+publishes the plan as JSON on `/rover/config` (`std_msgs/String`, latched):
+
+```json
+{"rover": "crew_pressurised", "rover_name": "Pressurised crew rover",
+ "equipment": {"arm_heavy": 1, "core_drill": 1, "o2_tank": 2},
+ "payload_kg": 238, "equipment_power_w": 400, "drive_hours": 19.5,
+ "range_km": 195.0, "extra_o2_hours": 4, "max_slope_deg": 15, "shelter": true}
+```
+
+Nothing subscribes to it yet; the cost map and the suit monitor could take the
+rover's slope limit and the spare oxygen from it. Equipment shapes in the
+preview are stand-ins for the team's CAD models.

@@ -41,6 +41,7 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Dashboard 3D w Three.js zamiast mapy 2D | gotowe |
 | Lidar na łaziku (`/rover/points`) nałożony na widok 3D | gotowe |
 | Kamery kasku i łazika w ROS 2, druga zakładka dashboardu z nakładką HUD | gotowe |
+| Zakładka „Rover planner”: 3 łaziki, osprzęt z ilościami, bilans, podgląd 3D, `/rover/config` | gotowe |
 
 Uruchomienie:
 

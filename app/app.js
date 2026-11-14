@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { initPlanner } from "./rover_planner.js";
 
 const MESH_STEP = 2; // use every 2nd height sample, about 4 m
 const TRAIL_POINTS = 2000;
@@ -371,9 +372,20 @@ async function main() {
 
   // --- Tabs and camera feeds -------------------------------------------------
   let activeTab = "view";
+  let plannerReady = false;
   for (const tab of document.querySelectorAll(".tab")) {
     tab.addEventListener("click", () => {
       activeTab = tab.dataset.tab;
+      if (activeTab === "planner" && !plannerReady) {
+        plannerReady = true;
+        initPlanner({
+          send: (message) => {
+            if (socket?.readyState !== WebSocket.OPEN) return false;
+            socket.send(JSON.stringify(message));
+            return true;
+          },
+        });
+      }
       for (const other of document.querySelectorAll(".tab")) {
         const on = other === tab;
         other.classList.toggle("active", on);

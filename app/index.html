@@ -19,6 +19,7 @@
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" class="tab active" data-tab="view" aria-selected="true">3D map</button>
     <button type="button" role="tab" class="tab" data-tab="cameras" aria-selected="false">Cameras</button>
+    <button type="button" role="tab" class="tab" data-tab="planner" aria-selected="false">Rover planner</button>
   </nav>
 
   <div id="view" class="tab-panel" aria-label="3D view of the terrain patch">
@@ -51,6 +52,26 @@
       </div>
       <figcaption><span class="dot rover"></span>Rover front camera · <span id="age-rover">–</span></figcaption>
     </figure>
+  </div>
+
+  <div id="planner" class="tab-panel" hidden>
+    <div class="planner-left">
+      <div id="planner-view" class="planner-view"></div>
+      <div id="planner-budget" class="planner-budget"></div>
+      <div class="planner-actions">
+        <button type="button" id="planner-send">Send to ROS 2</button>
+        <button type="button" id="planner-download">Download JSON</button>
+        <span id="planner-sent"></span>
+      </div>
+      <p class="note" id="planner-note"></p>
+      <p class="note">Equipment shapes are stand-ins until the team's CAD models replace them.</p>
+    </div>
+    <div class="planner-right">
+      <h2>Rover</h2>
+      <div id="planner-rovers" class="planner-rovers"></div>
+      <h2>Equipment</h2>
+      <div id="planner-equipment"></div>
+    </div>
   </div>
   </main>
 

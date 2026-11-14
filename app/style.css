@@ -56,6 +56,74 @@ body {
 .feed img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .feed img:not([src]) { visibility: hidden; }
 .no-signal[hidden] { display: none; }
+
+#planner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 1fr);
+  gap: 14px;
+  padding: 12px;
+  overflow: hidden;
+}
+.planner-left, .planner-right { min-height: 0; overflow-y: auto; }
+.planner-right h2 { margin-top: 4px; }
+.planner-view { position: relative; height: 46vh; min-height: 240px; border-radius: 6px; overflow: hidden; }
+.planner-view canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.planner-budget { margin-top: 10px; }
+.budget-row { margin-bottom: 6px; }
+.planner-status { margin: 10px 0 0; font-weight: 600; }
+.planner-status.good { color: var(--ok); }
+.planner-status.bad, .row b.bad { color: var(--bad); }
+.planner-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.planner-actions button, .stepper button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.planner-actions button:first-child { background: var(--accent); border-color: var(--accent); color: #1a120d; font-weight: 600; }
+.planner-actions button:disabled, .stepper button:disabled { opacity: 0.4; cursor: not-allowed; }
+#planner-sent { color: var(--muted); font-size: 12px; }
+
+.planner-rovers { display: grid; gap: 8px; margin-bottom: 16px; }
+.rover-card {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rover-card span { color: var(--muted); font-size: 12px; }
+.rover-card small { color: var(--muted); font-size: 11px; }
+.rover-card.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.equip-group h3 { margin: 12px 0 4px; font-size: 13px; color: var(--accent); }
+.equip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.equip-row div:first-child { display: grid; gap: 2px; min-width: 0; }
+.equip-row span, .equip-row small { color: var(--muted); font-size: 12px; }
+.equip-row.unfit { opacity: 0.45; }
+.stepper { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.stepper button { width: 30px; padding: 4px 0; }
+.stepper output { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1000px) {
+  #planner { grid-template-columns: 1fr; overflow-y: auto; }
+  .planner-left, .planner-right { overflow: visible; }
+}
 .feed figcaption { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .no-signal {
   position: absolute;

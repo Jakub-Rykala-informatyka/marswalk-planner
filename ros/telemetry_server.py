@@ -68,6 +68,7 @@ class Telemetry(Node):
             self.create_subscription(Image, topic, lambda msg, n=name: self.on_image(n, msg), 2)
         self.create_subscription(String, "/suit/status", self.on_suit_status, 10)
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
+        self.config_pub = self.create_publisher(String, "/rover/config", LATCHED)
         self.create_subscription(RoutePath, "/route", self.on_route, LATCHED)
         self.create_subscription(String, "/route/summary", self.on_route_summary, LATCHED)
         self.create_subscription(Clock, "/clock", self.on_clock, 10)
@@ -223,9 +224,11 @@ async def websocket(request):
             if msg.type == WSMsgType.ERROR:
                 break
             if msg.type == WSMsgType.TEXT:
-                goal = json.loads(msg.data).get("goal")
-                if goal:  # a click on the map sets a new science target
-                    request.app["telemetry"].publish_goal(goal["x"], goal["y"])
+                data = json.loads(msg.data)
+                if data.get("goal"):  # a click on the map sets a new science target
+                    request.app["telemetry"].publish_goal(data["goal"]["x"], data["goal"]["y"])
+                if data.get("rover_config"):  # the rover planner tab
+                    request.app["telemetry"].config_pub.publish(String(data=json.dumps(data["rover_config"])))
     finally:
         request.app["clients"].discard(ws)
     return ws
