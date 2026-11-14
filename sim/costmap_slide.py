@@ -27,7 +27,7 @@ W, H = 1920, 1080
 TEX = 512  # texture size of each tile before it is tilted
 
 # Same scales and planner defaults as ros/nasa_layers.py and ros/planner.py
-SLOPE_FULL_DEG, ROUGHNESS_FULL_M = 45.0, 1.0
+SLOPE_FULL_DEG, ROUGHNESS_FULL_M = 45.0, 2.0
 COARSE, COST_SCALE, WALK_SPEED = 2, 25.0, 0.8
 
 BG = (14, 17, 26)
@@ -206,15 +206,15 @@ def main():
     inputs = [
         (grid_to_image(grey(raw["dose_rate"], 14.0, 26.7)), "Radiation dose rate",
          "MSL RAD 0.64 mSv/day x open sky\n14–27 µSv/h (model)"),
-        (grid_to_image(grey(raw["roughness"], 0.0, 1.0)), "Surface roughness",
-         "HiRISE DTM, 1 m posts\n0–1 m bumps per cell"),
+        (grid_to_image(grey(raw["roughness"], 0.0, 2.0)), "Surface roughness",
+         "HiRISE DTM, 1 m posts\n0–2 m bumps per cell"),
         (grid_to_image(grey(raw["slope"], 0.0, 45.0)), "Terrain slope",
          "HiRISE DTM, 1 m posts\n0–45° (white = steep)"),
     ]
     factors = [
         (terms["dose"] / p["dose_weight"], None, "Dose cost  × 10",
          "more open sky = more dose"),
-        (terms["roughness"] / p["roughness_weight"], None, "Roughness cost  × 15",
+        (terms["roughness"] / p["roughness_weight"], raw["roughness"] >= p["max_roughness_m"], "Roughness cost  × 15",
          f"keep out from {p['max_roughness_m']:g} m"),
         (terms["slope"] / p["slope_weight"], raw["slope"] >= p["max_slope_deg"], "Slope cost  × 70",
          f"easy below {p['comfort_slope_deg']:g}°, keep out from {p['max_slope_deg']:g}°"),

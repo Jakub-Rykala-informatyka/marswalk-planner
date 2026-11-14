@@ -22,7 +22,7 @@ LAYERS = ROOT / "data" / "layers"
 # name: layer value mapped to 100 (0 maps to 0)
 SCALES = {
     "slope": 45.0,  # deg, steeper is clipped to 100
-    "roughness": 1.0,  # m
+    "roughness": 2.0,  # m, the walking keep-out limit in costmap.py
     "sky_view": 1.0,  # fraction of open sky
     "dose_rate": None,  # filled from data/meta.json: open-ground rate from RAD
 }

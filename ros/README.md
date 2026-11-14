@@ -41,7 +41,7 @@ south-west of the map origin. Values are 0..100:
 | Topic | 100 means | Source |
 | --- | --- | --- |
 | `/nasa/slope` | 45° or steeper | HiRISE DTM |
-| `/nasa/roughness` | 1 m height spread or more | HiRISE DTM |
+| `/nasa/roughness` | 2 m height spread or more | HiRISE DTM |
 | `/nasa/sky_view` | open sky, no terrain above the horizon | HiRISE DTM |
 | `/nasa/dose_rate` | 26.7 µSv/h, the open-ground rate measured by RAD | RAD on Curiosity × sky view |
 

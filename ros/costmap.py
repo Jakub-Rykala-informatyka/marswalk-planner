@@ -27,7 +27,7 @@ LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
 
 # Value of 100 in each /nasa/* grid, as published by nasa_layers (see ros/README.md)
 SLOPE_FULL_DEG = 45.0
-ROUGHNESS_FULL_M = 1.0
+ROUGHNESS_FULL_M = 2.0
 
 LAYERS = ("slope", "roughness", "dose_rate")
 
