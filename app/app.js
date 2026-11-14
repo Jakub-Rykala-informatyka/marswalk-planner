@@ -313,6 +313,8 @@ async function main() {
   overview();
   $("follow").checked = true;
   $("overview").addEventListener("click", overview);
+  let savePngRequested = false;
+  $("save-png").addEventListener("click", () => { savePngRequested = true; });
 
   function resize() {
     const { clientWidth: w, clientHeight: h } = view;
@@ -379,6 +381,27 @@ async function main() {
     goalMarker.scale.setScalar(Math.max(0.6, camera.position.distanceTo(goalMarker.position) / 250));
     controls.update();
     renderer.render(scene, camera);
+    if (savePngRequested) {
+      // Export the whole patch, not the current view: frame all of it, draw, read the canvas
+      // in the same frame (so it is not blank), then put the camera back where it was
+      savePngRequested = false;
+      const keepPosition = camera.position.clone(), keepTarget = controls.target.clone();
+      controls.target.copy(centre);
+      camera.position.copy(centre).add(new THREE.Vector3(0, size * 1.15, size * 0.35));
+      camera.lookAt(centre);
+      renderer.render(scene, camera);
+      renderer.domElement.toBlob((blob) => {
+        const link = Object.assign(document.createElement("a"), {
+          href: URL.createObjectURL(blob),
+          download: `marswalk-3d-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
+        });
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      }, "image/png");
+      camera.position.copy(keepPosition);
+      controls.target.copy(keepTarget);
+      camera.lookAt(keepTarget);
+    }
   }
 
   // --- Tabs and camera feeds -------------------------------------------------
