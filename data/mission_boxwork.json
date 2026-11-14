@@ -1,0 +1,51 @@
+{
+  "id": "boxwork-eva-1",
+  "name": "Boxwork EVA 1: groundwater ridges of lower Mount Sharp",
+  "objective": "Find out how the boxwork ridges formed: sample the mineral-filled ridges and the material between them, and drill one ridge to see whether groundwater minerals continue into the rock.",
+  "background": "Boxwork is a web of ridges left where groundwater deposited minerals in rock fractures and the softer rock around them eroded. NASA's HiRISE camera imaged boxwork on lower Mount Sharp (PIA26306, taken on 10 December 2006, the same HiRISE observation as this terrain patch) and the Curiosity rover studied boxwork ridges up close in 2025. Minerals in the ridges crystallised underground with liquid water, so they may record a habitable environment.",
+  "site_note": "Targets are placed by eye on boxwork-like polygonal ridges in this HiRISE patch. The exact position of the PIA26306 frame within the strip has not been matched.",
+  "start": { "name": "Crew rover parking", "x": 1141.0, "y": 834.0 },
+  "return_to_start": true,
+  "targets": [
+    {
+      "id": "B",
+      "name": "Boxwork field, west",
+      "x": 470.0, "y": 520.0,
+      "why": "Dense polygonal ridges with dark sand between them: the clearest boxwork pattern in the patch.",
+      "tasks": ["Photograph the ridge network", "Spectrometer readings on ridge and hollow", "Hammer samples from two ridges", "Scoop sand from a hollow"],
+      "tools": ["geo_tools", "sample_box", "spectrometer"],
+      "minutes": 25,
+      "priority": 1
+    },
+    {
+      "id": "C",
+      "name": "Wall of the sand-filled hollow",
+      "x": 1255.0, "y": 700.0,
+      "why": "The inner wall exposes the layers the ridges cut through; dark basaltic sand fills the floor.",
+      "tasks": ["Sample the wall layers", "Sample the floor sand"],
+      "tools": ["sample_box"],
+      "minutes": 20,
+      "priority": 2
+    },
+    {
+      "id": "A",
+      "name": "Boxwork ridge, south",
+      "x": 1560.0, "y": 90.0,
+      "why": "A long ridge in a second boxwork field: drilling shows whether the vein minerals continue below the surface.",
+      "tasks": ["Core-drill the ridge crest", "Hammer sample of the host rock", "Spectrometer reading of the core"],
+      "tools": ["core_drill", "geo_tools", "sample_box", "spectrometer"],
+      "minutes": 40,
+      "priority": 1
+    },
+    {
+      "id": "D",
+      "name": "Bench viewpoint, east",
+      "x": 1905.0, "y": 905.0,
+      "why": "High bench with a view over both boxwork fields: context panoramas for the science team.",
+      "tasks": ["Panorama of the boxwork fields"],
+      "tools": ["pan_cam"],
+      "minutes": 15,
+      "priority": 3
+    }
+  ]
+}

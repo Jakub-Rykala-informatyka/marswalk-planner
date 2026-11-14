@@ -120,6 +120,43 @@ body {
 .stepper button { width: 30px; padding: 4px 0; }
 .stepper output { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 
+#mission { overflow-y: auto; padding: 14px 18px 24px; max-width: 980px; }
+.mission-actions { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.mission-actions button {
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); color: var(--text); font: inherit; cursor: pointer;
+}
+.mission-actions button:first-child { background: var(--accent); border-color: var(--accent); color: #1a120d; font-weight: 600; }
+#mission-sent { color: var(--muted); font-size: 12px; }
+.mission-title { font-size: 22px; margin: 4px 0 6px; }
+.objective { font-size: 15px; margin: 0 0 10px; }
+#mission details { margin-bottom: 12px; color: var(--muted); }
+#mission summary { cursor: pointer; color: var(--text); }
+#mission h2 { margin-top: 20px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 10px 0; }
+.card { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.card span { display: block; color: var(--muted); font-size: 12px; }
+.card b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.card.bad b { color: var(--bad); }
+.targets { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.target { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.target p { margin: 6px 0 0; }
+.target-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.badge {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #1a120d; font-weight: 700; font-size: 12px;
+}
+.exec { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.exec-astronaut { background: color-mix(in srgb, var(--astronaut) 22%, transparent); color: var(--astronaut); }
+.exec-arm, .exec-arm-rover { background: color-mix(in srgb, var(--rover) 22%, transparent); color: var(--rover); }
+.exec-astronaut-rover { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.tasks { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
+.target .meta { color: var(--muted); font-size: 12px; }
+.warn { color: var(--rover); font-size: 12px; }
+.timeline { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.timeline th, .timeline td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.timeline th { color: var(--muted); font-weight: 500; }
+
 @media (max-width: 1000px) {
   #planner { grid-template-columns: 1fr; overflow-y: auto; }
   .planner-left, .planner-right { overflow: visible; }

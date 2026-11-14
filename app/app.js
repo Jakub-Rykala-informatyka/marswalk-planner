@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { initPlanner } from "./rover_planner.js";
+import { loadToolNames, renderMission } from "./mission.js";
 
 const MESH_STEP = 2; // use every 2nd height sample, about 4 m
 const TRAIL_POINTS = 2000;
@@ -372,13 +373,13 @@ async function main() {
       $("readout").hidden = slope === null;
       if (slope !== null) $("readout").textContent = `x ${fmt(point.x)} m · y ${fmt(point.y)} m · slope ${fmt(slope, 1)}°`;
     }
+    updatePins();
     goalArrow.position.y = 1.5 + 1.5 * Math.sin(performance.now() / 300); // bob above the target
     // Keep the arrow readable from far away: grow it with the camera distance
     goalMarker.scale.setScalar(Math.max(0.6, camera.position.distanceTo(goalMarker.position) / 250));
     controls.update();
     renderer.render(scene, camera);
   }
-  animate();
 
   // --- Tabs and camera feeds -------------------------------------------------
   let activeTab = "view";
@@ -430,7 +431,69 @@ async function main() {
     }
   }
 
+  // --- Mission: numbered pins and the mission route on the 3D map ---------------
+  await loadToolNames();
+  const missionGroup = new THREE.Group();
+  scene.add(missionGroup);
+  const missionLine = new THREE.Line(new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({ color: 0x9ef0ff, depthTest: false, transparent: true, opacity: 0.9 }));
+  missionLine.renderOrder = 2;
+  scene.add(missionLine);
+  function pin(label, color) {
+    const label_canvas = Object.assign(document.createElement("canvas"), { width: 128, height: 128 });
+    const c = label_canvas.getContext("2d");
+    c.fillStyle = color; c.beginPath(); c.arc(64, 64, 56, 0, Math.PI * 2); c.fill();
+    c.fillStyle = "#1a120d"; c.font = "bold 72px system-ui"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText(label, 64, 68);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(label_canvas), depthTest: false }));
+    sprite.renderOrder = 4;
+    return sprite;
+  }
+  const pins = [];
+  async function loadMission() {
+    const plan = await (await fetch("/mission")).json();
+    renderMission(plan);
+    for (const old of [...missionGroup.children]) { missionGroup.remove(old); old.material.map.dispose(); old.material.dispose(); }
+    pins.length = 0;
+    if (!plan?.ok) return;
+    const add = (label, color, x, y) => {
+      const sprite = pin(label, color);
+      sprite.userData.anchor = lift(x, y, 0);
+      missionGroup.add(sprite);
+      pins.push(sprite);
+    };
+    plan.targets.forEach((target, i) => add(String(i + 1), "#ff8a3d", target.x, target.y));
+    add("R", "#eeeeee", plan.start.x, plan.start.y);
+    const route = await (await fetch("/mission/route")).json();
+    if (route.length > 1) {
+      missionLine.geometry.dispose();
+      missionLine.geometry = new THREE.BufferGeometry().setFromPoints(route.map(([x, y]) => lift(x, y, 0.8)));
+    }
+  }
+  // Pins keep a readable size on screen and float above their target
+  function updatePins() {
+    for (const sprite of pins) {
+      const distance = camera.position.distanceTo(sprite.userData.anchor);
+      const size = Math.max(4, distance / 22);
+      sprite.scale.setScalar(size);
+      sprite.position.copy(sprite.userData.anchor).add(new THREE.Vector3(0, size * 0.9, 0));
+    }
+  }
+
+  $("mission-start").addEventListener("click", () => {
+    const ok = socket?.readyState === WebSocket.OPEN;
+    if (ok) socket.send(JSON.stringify({ mission_start: true }));
+    $("mission-sent").textContent = ok ? "Mission route sent to /route" : "Not connected to the server";
+  });
+  $("mission-show").addEventListener("click", () => {
+    document.querySelector('.tab[data-tab="view"]').click();
+    overview();
+  });
+
+  animate(); // after the mission pins exist, which every frame updates
+
   // --- Telemetry ------------------------------------------------------------
+  let missionVersion = null;
   const costVersions = {};
   let routeVersion = null;
   let pointsVersion = null;
@@ -477,6 +540,10 @@ async function main() {
   }
 
   function show(message) {
+    if (message.mission && message.mission !== missionVersion) {
+      missionVersion = message.mission;
+      loadMission();
+    }
     for (const [variant, version] of Object.entries(message.costmaps ?? {})) {
       if (costVersions[variant] !== version) {
         costVersions[variant] = version;

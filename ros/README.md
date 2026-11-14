@@ -159,6 +159,29 @@ The dashboard has three tabs: a 3D map (Three.js) with the terrain, layers,
 route, lidar points and markers; the two camera feeds with a HUD overlay on
 the helmet camera; and the rover planner.
 
+## Mission planner
+
+`ros/mission_planner.py` plans a whole science EVA from `data/mission_boxwork.json`:
+the objective (how the boxwork ridges formed), the crew rover parking point and
+four targets with tasks, tools, time on site and priority. It subscribes to
+`/costmap/walk`, `/costmap/rover`, `/nasa/dose_rate` and `/rover/config` and
+
+- decides who works at each target: the astronaut, the rover arm (target in a
+  keep-out cell or steeper than 15°; the astronaut stops at the nearest safe
+  point) or with the crew rover (the core drill stays on the rover, so the rover
+  must be able to drive there),
+- orders the targets for the shortest walk (all orders are tried) and plans
+  every leg with A* on the walking cost map,
+- checks oxygen (8 h suit, 30 min reserve, spare tanks if the helper robot
+  carries them) and drops the lowest-priority targets if it does not last,
+- checks tools and the arm against the rover plan.
+
+It publishes `/mission/plan` (JSON, latched) and `/mission/route` (`nav_msgs/Path`,
+latched). `std_msgs/Empty` on `/mission/start` (the "Start mission walk"
+button) republishes the mission route on `/route`, so the simulation walks it.
+The dashboard's Mission tab shows the plan; the 3D map shows numbered pins and
+the mission route.
+
 ## Rover planner
 
 The third tab picks one of the rovers in `app/rover_catalog.json` (pressurised

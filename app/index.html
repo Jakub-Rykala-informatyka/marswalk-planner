@@ -17,6 +17,7 @@
 <body>
   <main id="main">
   <nav class="tabs" role="tablist">
+    <button type="button" role="tab" class="tab" data-tab="mission" aria-selected="false">Mission</button>
     <button type="button" role="tab" class="tab active" data-tab="view" aria-selected="true">3D map</button>
     <button type="button" role="tab" class="tab" data-tab="cameras" aria-selected="false">Cameras</button>
     <button type="button" role="tab" class="tab" data-tab="planner" aria-selected="false">Rover planner</button>
@@ -52,6 +53,15 @@
       </div>
       <figcaption><span class="dot rover"></span>Rover front camera · <span id="age-rover">–</span></figcaption>
     </figure>
+  </div>
+
+  <div id="mission" class="tab-panel" hidden>
+    <div class="mission-actions">
+      <button type="button" id="mission-start">Start mission walk</button>
+      <button type="button" id="mission-show">Show on 3D map</button>
+      <span id="mission-sent"></span>
+    </div>
+    <div id="mission-body"><p class="note">Waiting for /mission/plan from ROS 2.</p></div>
   </div>
 
   <div id="planner" class="tab-panel" hidden>

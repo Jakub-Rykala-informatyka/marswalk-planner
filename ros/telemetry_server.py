@@ -24,7 +24,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Image, PointCloud2
-from std_msgs.msg import Float32, String
+from std_msgs.msg import Empty, Float32, String
 
 ROOT = Path(__file__).resolve().parents[1]
 STALE_AFTER = 2.0  # s without a pose before the dashboard shows the source as offline
@@ -69,6 +69,11 @@ class Telemetry(Node):
         self.create_subscription(String, "/suit/status", self.on_suit_status, 10)
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.config_pub = self.create_publisher(String, "/rover/config", LATCHED)
+        self.mission_start_pub = self.create_publisher(Empty, "/mission/start", 10)
+        self.mission = (0, None)  # version, plan
+        self.create_subscription(String, "/mission/plan", self.on_mission, LATCHED)
+        self.mission_route = []
+        self.create_subscription(RoutePath, "/mission/route", self.on_mission_route, LATCHED)
         self.create_subscription(RoutePath, "/route", self.on_route, LATCHED)
         self.create_subscription(String, "/route/summary", self.on_route_summary, LATCHED)
         self.create_subscription(Clock, "/clock", self.on_clock, 10)
@@ -135,6 +140,12 @@ class Telemetry(Node):
         points = [[round(p.pose.position.x, 2), round(p.pose.position.y, 2)] for p in msg.poses]
         self.route = (self.route[0] + 1, points)
 
+    def on_mission_route(self, msg):
+        self.mission_route = [[round(p.pose.position.x, 2), round(p.pose.position.y, 2)] for p in msg.poses]
+
+    def on_mission(self, msg):
+        self.mission = (self.mission[0] + 1, json.loads(msg.data))
+
     def on_suit_status(self, msg):
         self.suit_status = json.loads(msg.data)
 
@@ -156,6 +167,7 @@ class Telemetry(Node):
                    "costmaps": {variant: entry[0] for variant, entry in self.costmaps.items()},
                    "route": {"version": self.route[0], "summary": self.route_summary},
                    "points": self.points[0],
+                   "mission": self.mission[0],
                    "cameras": {name: entry[0] for name, entry in self.images.items()}}
         suit = dict(self.suit_status or {})
         if self.dose_rate is not None:
@@ -173,6 +185,10 @@ class Telemetry(Node):
 def array_bytes(data):
     """OccupancyGrid data as raw bytes, whether rclpy gives an array or a list."""
     return data.tobytes() if hasattr(data, "tobytes") else bytes(v & 0xFF for v in data)
+
+
+async def mission(request):
+    return web.json_response(request.app["telemetry"].mission[1], headers={"Cache-Control": "no-store"})
 
 
 async def points(request):
@@ -227,6 +243,8 @@ async def websocket(request):
                 data = json.loads(msg.data)
                 if data.get("goal"):  # a click on the map sets a new science target
                     request.app["telemetry"].publish_goal(data["goal"]["x"], data["goal"]["y"])
+                if data.get("mission_start"):  # the mission tab
+                    request.app["telemetry"].mission_start_pub.publish(Empty())
                 if data.get("rover_config"):  # the rover planner tab
                     request.app["telemetry"].config_pub.publish(String(data=json.dumps(data["rover_config"])))
     finally:
@@ -274,6 +292,8 @@ def main():
     app.router.add_get("/costmap/{variant}", costmap)
     app.router.add_get("/route", route)
     app.router.add_get("/points", points)
+    app.router.add_get("/mission", mission)
+    app.router.add_get("/mission/route", lambda request: web.json_response(request.app["telemetry"].mission_route))
     app.router.add_get("/camera/{name}", camera)
     app.router.add_static("/app", ROOT / "app")
     app.router.add_static("/data", ROOT / "data")
