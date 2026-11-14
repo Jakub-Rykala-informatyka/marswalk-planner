@@ -414,9 +414,67 @@ async function main() {
       feeds[name].loading = false;
       feeds[name].received = performance.now();
       $(`nosignal-${name}`).hidden = true;
+      if (zoomed === name) $("lightbox-img").src = image.src; // keep the enlarged view live
     });
     image.addEventListener("error", () => { feeds[name].loading = false; });
   }
+  // Enlarge a camera view: the frame starts where the thumbnail is and grows to the centre
+  const lightbox = $("lightbox");
+  const lightboxFrame = lightbox.querySelector(".lightbox-frame");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  let zoomed = null;
+  function placeFrame(fromRect) {
+    // Transform that puts the frame exactly over the thumbnail rectangle
+    const to = lightboxFrame.getBoundingClientRect();
+    const scale = fromRect.width / to.width;
+    const dx = fromRect.left - to.left, dy = fromRect.top - to.top;
+    lightboxFrame.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
+  }
+  function openZoom(name) {
+    if (zoomed) return;
+    const thumb = $(`camera-${name}`);
+    if (!thumb.getAttribute("src")) return; // nothing to enlarge yet
+    zoomed = name;
+    const fromRect = thumb.getBoundingClientRect();
+    $("lightbox-img").src = thumb.src;
+    $("lightbox-img").alt = thumb.alt;
+    $("lightbox-cap").textContent = thumb.alt;
+    lightbox.hidden = false;
+    lightbox.classList.remove("fading");
+    if (reduceMotion.matches) {
+      lightbox.classList.add("open");
+      return;
+    }
+    // Start from the thumbnail with no transition, then animate to full size
+    lightboxFrame.style.transition = "none";
+    placeFrame(fromRect);
+    lightboxFrame.getBoundingClientRect(); // force the start position
+    lightboxFrame.style.transition = "";
+    lightbox.classList.add("open");
+    lightboxFrame.style.transform = "none";
+  }
+  function closeZoom() {
+    if (!zoomed) return;
+    const name = zoomed;
+    zoomed = null;
+    if (reduceMotion.matches) {
+      lightbox.classList.remove("open");
+      lightbox.hidden = true;
+      return;
+    }
+    const thumb = $(`camera-${name}`);
+    const fromRect = thumb.getBoundingClientRect();
+    lightbox.classList.remove("open");
+    placeFrame(fromRect);
+    const done = () => { lightbox.hidden = true; lightboxFrame.style.transform = "none"; lightboxFrame.removeEventListener("transitionend", done); };
+    lightboxFrame.addEventListener("transitionend", done);
+    setTimeout(done, 450); // in case the transition is skipped
+  }
+  for (const name of ["astronaut", "rover", "arm"]) {
+    $(`camera-${name}`).addEventListener("click", () => openZoom(name));
+  }
+  lightbox.addEventListener("click", closeZoom);
+  document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeZoom(); });
   function updateFeeds(versions) {
     for (const [name, feed] of Object.entries(feeds)) {
       const version = versions?.[name];

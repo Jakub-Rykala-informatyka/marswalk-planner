@@ -55,6 +55,33 @@ body {
 .feed .frame { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 6px; overflow: hidden; }
 .feed img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .feed img:not([src]) { visibility: hidden; }
+.feed img { cursor: zoom-in; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.feed img:hover { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Enlarged camera view: the frame grows from the thumbnail's place (FLIP) */
+.lightbox {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(8, 6, 5, 0);
+  transition: background 0.3s ease;
+}
+.lightbox.open { background: rgba(8, 6, 5, 0.88); }
+.lightbox[hidden] { display: none; }
+.lightbox-figure { margin: 0; width: min(92vw, 1280px); }
+.lightbox-frame {
+  width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden;
+  background: #000; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  transform-origin: top left;
+  transition: transform 0.38s cubic-bezier(0.2, 0.7, 0.2, 1);
+  cursor: zoom-out;
+}
+.lightbox-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.lightbox-figure figcaption { margin-top: 10px; color: var(--muted); font-size: 13px; text-align: center; }
+.lightbox-hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+.lightbox.fading .lightbox-frame { transition-duration: 0.3s; }
+@media (prefers-reduced-motion: reduce) {
+  .lightbox, .lightbox-frame, .feed img { transition: none !important; }
+}
 .no-signal[hidden] { display: none; }
 
 .arm-panel { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
