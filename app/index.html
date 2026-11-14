@@ -34,6 +34,14 @@
     </section>
 
     <section>
+      <h2>Radiation</h2>
+      <p class="row"><span>Dose rate here</span><b id="dose-rate">–</b></p>
+      <p class="row"><span>Dose this walk</span><b id="dose-total">–</b></p>
+      <p class="note">Galactic cosmic rays measured by RAD on Curiosity in Gale crater,
+        reduced where terrain hides part of the sky.</p>
+    </section>
+
+    <section>
       <h2><span class="dot rover"></span>Support rover</h2>
       <p class="row"><span>State</span><b id="rover-state">–</b></p>
       <p class="row"><span>Distance to astronaut</span><b id="rover-distance">–</b></p>
@@ -47,11 +55,15 @@
         <li><i style="background:#ffbe00"></i>Slope 15–25°, slow going</li>
         <li><i style="background:#dc1e1e"></i>Slope above 25°, keep out</li>
       </ul>
+      <ul class="legend" id="shelter-legend" hidden>
+        <li><i style="background:#28d7c8"></i>Terrain cuts the cosmic-ray dose, stronger teal = lower dose</li>
+      </ul>
     </section>
 
     <footer>
       Terrain and imagery: NASA/JPL-Caltech/UArizona, HiRISE
-      <span id="sources"></span>. Image colour is a tint, not measured data.
+      <span id="sources"></span>. Radiation: MSL RAD, Hassler et al. 2014.
+      Image colour is a tint, not measured data.
     </footer>
   </aside>
 

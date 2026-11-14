@@ -7,8 +7,8 @@ python.sh without starting the simulator.
   crop      -> data/terrain/{heights.npy, texture.jpg, meta.json}
   hires     -> data/terrain/texture_hires.jpg for the same patch, from the
                25 cm orthoimage (large, kept out of the repository)
-  layers    -> data/layers/: slope, roughness and sky-view factor of the patch,
-               as .npy for the planner and .png for the map
+  layers    -> data/layers/: slope, roughness, sky-view factor and radiation
+               dose rate of the patch, as .npy for the planner and .png for the map
 
 Pixel coordinates are (line, sample) of the full DTM, line 0 at the north edge.
 Local coordinates of the patch: metres, origin in the south-west corner,
@@ -35,6 +35,9 @@ ORTHO_HIRES = RAW / "PSP_001752_1750_RED_A_01_ORTHO.JP2"
 NODATA_BELOW = -1e30
 # Mars-like tint for the grayscale HiRISE RED band (colour is not measured data)
 MARS_TINT = np.array([1.00, 0.66, 0.42])
+# Mean GCR dose equivalent rate on open ground in Gale crater, measured by RAD
+# on Curiosity (Hassler et al. 2014, Science 343, 1244797): 0.64 mSv per day
+RAD_DOSE_USV_PER_H = 640.0 / 24.0
 
 
 def label_keys(path):
@@ -172,12 +175,15 @@ def layers():
     slope = np.degrees(np.arctan(np.hypot(dz_dx, dz_dy))).astype(np.float32)
     rough = roughness(heights)
     sky = sky_view_factor(heights, cell).astype(np.float32)
+    # Simplification: GCR dose scales with the open sky above the point
+    dose = (RAD_DOSE_USV_PER_H * sky).astype(np.float32)
 
     # name: (array, unit, value shown as black, value shown as white)
     products = {
         "slope": (slope, "deg", 0.0, 45.0),
         "roughness": (rough, "m", 0.0, 1.0),
         "sky_view": (sky, "fraction of open sky", 0.5, 1.0),
+        "dose_rate": (dose, "uSv/h", 0.5 * RAD_DOSE_USV_PER_H, RAD_DOSE_USV_PER_H),
     }
     described = {}
     for name, (array, unit, lo, hi) in products.items():
@@ -193,6 +199,14 @@ def layers():
     classes[slope >= 25] = (220, 30, 30, 170)
     Image.fromarray(np.flipud(classes)).save(out / "slope_classes.png")
 
+    # Shelter overlay: clear while the dose is within 3 % of open ground,
+    # full teal at 70 % of it and below
+    reduction = np.clip((0.97 - sky) / 0.27, 0, 1)
+    shelter = np.zeros((*sky.shape, 4), dtype=np.uint8)
+    shelter[..., :3] = (40, 215, 200)
+    shelter[..., 3] = (reduction * 230).astype(np.uint8)
+    Image.fromarray(np.flipud(shelter)).save(out / "dose_shelter.png")
+
     meta = {
         "source": "data/terrain/heights.npy",
         "grid": patch["grid"],
@@ -204,6 +218,14 @@ def layers():
         "png_rows": "row 0 is the north edge, like a map",
         "layers": described,
         "slope_classes": {"clear": "below 15 deg", "amber": "15 to 25 deg", "red": "25 deg and above"},
+        "dose_model": {
+            "open_ground_uSv_per_h": RAD_DOSE_USV_PER_H,
+            "source": "MSL RAD, Hassler et al. 2014, Science 343, 1244797: 0.64 mSv/day",
+            "formula": "dose_rate = open_ground_rate * sky_view",
+            "limits": "galactic cosmic rays only; ignores the angular spread of the flux, "
+                      "secondary particles from the ground and solar particle events",
+            "dose_shelter_png": "transparent above 97 % of the open-ground dose, full teal at 70 % and below",
+        },
     }
     (ROOT / "data" / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
     for name, info in described.items():

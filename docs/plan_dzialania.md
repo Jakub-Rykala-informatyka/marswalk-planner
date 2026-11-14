@@ -31,6 +31,9 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Serwer telemetrii (ROS 2 → WebSocket) | gotowe |
 | Dashboard: mapa, warstwy, trasa, pozycje na żywo | gotowe |
 | Warstwy: nachylenie, szorstkość, widoczność nieba | gotowe |
+| Trzeci rodzaj danych: dawka promieniowania z RAD × widoczność nieba | gotowe |
+| Warstwy NASA jako tematy ROS `/nasa/*` | gotowe |
+| Dawka astronauty na żywo (`/astronaut/dose_rate`, `/astronaut/dose`) | gotowe |
 
 Uruchomienie:
 
@@ -41,8 +44,8 @@ Uruchomienie:
 
 ### Co dalej, w kolejności
 
-1. **Trzeci rodzaj danych.** Zadanie chce co najmniej trzech, a mamy dwa (wysokości i zdjęcia). Najtaniej: dawka promieniowania z przyrządu RAD pomnożona przez widoczność nieba, jako warstwa i temat `/nasa/dose_rate`.
-2. **Mapa kosztów na tematach ROS.** Warstwy z danych NASA publikowane jako tematy `/nasa/*`, węzeł mapy kosztów je subskrybuje i publikuje `/costmap`. Dwa warianty: pieszo i łazikiem.
+1. ~~Trzeci rodzaj danych~~: zrobione. Mamy wysokości i zdjęcia z HiRISE oraz promieniowanie z RAD.
+2. **Mapa kosztów na tematach ROS.** Warstwy `/nasa/*` już są publikowane. Brakuje węzła, który je subskrybuje i publikuje `/costmap`. Dwa warianty: pieszo i łazikiem.
 3. **Planer na tematach ROS.** Subskrybuje `/costmap`, pozycję i cel, publikuje `/route`. Symulacja i dashboard biorą trasę z tematu zamiast z pliku.
 4. **Budżet wyjścia.** Tlen, dawka i zapas na powrót do łazika, pokazane na dashboardzie i w HUD-zie.
 5. **HUD.** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard.
@@ -86,7 +89,7 @@ Gdy brakuje czasu, tniemy od dołu.
 - **Warstwy:** `data/layers/*.npy` (liczby, wiersz 0 to południe) i `*.png` (obraz, wiersz 0 to północ).
 - **Trasa:** GeoJSON w układzie lokalnym, na razie `data/route_example.geojson`.
 - **Tematy ROS 2:** opisane w `ros/README.md`, domena DDS 43.
-- **Dane na żywo dla przeglądarki:** jedna wiadomość JSON przez WebSocket `ws://localhost:8080/ws`, pięć razy na sekundę:
+- **Dane na żywo dla przeglądarki:** jedna wiadomość JSON przez WebSocket `ws://localhost:8080/ws`, pięć razy na sekundę (pole `suit` pojawia się, gdy działa `dose_monitor`):
 
 ```json
 {
@@ -94,11 +97,12 @@ Gdy brakuje czasu, tniemy od dołu.
   "t": 123.4,
   "astronaut": {"x": 1126.0, "y": 810.0, "z": 307.7, "heading_deg": -136.0},
   "rover": {"x": 1129.0, "y": 813.0, "z": 307.5, "heading_deg": -131.0, "state": "following"},
-  "rover_distance_m": 4.7
+  "rover_distance_m": 4.7,
+  "suit": {"dose_rate_uSv_h": 26.4, "dose_uSv": 0.52}
 }
 ```
 
-Pola budżetu (tlen, dawka, zapas na powrót, alert) dojdą do tej wiadomości, gdy powstaną węzły, które je liczą. HUD Rafała może już teraz czytać pozycje z tego samego adresu.
+Pozostałe pola budżetu (tlen, zapas na powrót, alert) dojdą do tej wiadomości, gdy powstaną węzły, które je liczą. HUD Rafała może już teraz czytać pozycje z tego samego adresu.
 
 ---
 

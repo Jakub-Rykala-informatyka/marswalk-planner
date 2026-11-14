@@ -18,7 +18,7 @@ from aiohttp import WSMsgType, web
 from geometry_msgs.msg import PoseStamped
 from rclpy.node import Node
 from rosgraph_msgs.msg import Clock
-from std_msgs.msg import String
+from std_msgs.msg import Float32, String
 
 ROOT = Path(__file__).resolve().parents[1]
 STALE_AFTER = 2.0  # s without a pose before the dashboard shows the source as offline
@@ -41,11 +41,15 @@ class Telemetry(Node):
         self.astronaut = None
         self.rover = None
         self.rover_state = None
+        self.dose_rate = None
+        self.dose = None
         self.last_pose_wall = 0.0
         self.create_subscription(Clock, "/clock", self.on_clock, 10)
         self.create_subscription(PoseStamped, "/astronaut/pose", self.on_astronaut, 10)
         self.create_subscription(PoseStamped, "/rover/pose", self.on_rover, 10)
         self.create_subscription(String, "/rover/state", self.on_rover_state, 10)
+        self.create_subscription(Float32, "/astronaut/dose_rate", self.on_dose_rate, 10)
+        self.create_subscription(Float32, "/astronaut/dose", self.on_dose, 10)
 
     def on_clock(self, msg):
         self.sim_time = msg.clock.sec + msg.clock.nanosec * 1e-9
@@ -60,10 +64,18 @@ class Telemetry(Node):
     def on_rover_state(self, msg):
         self.rover_state = msg.data
 
+    def on_dose_rate(self, msg):
+        self.dose_rate = msg.data
+
+    def on_dose(self, msg):
+        self.dose = msg.data
+
     def snapshot(self):
         age = self.get_clock().now().nanoseconds * 1e-9 - self.last_pose_wall
         live = self.astronaut is not None and age < STALE_AFTER
         message = {"live": live, "t": self.sim_time, "astronaut": self.astronaut, "rover": None}
+        if self.dose_rate is not None:
+            message["suit"] = {"dose_rate_uSv_h": round(self.dose_rate, 2), "dose_uSv": round(self.dose, 3)}
         if self.rover:
             message["rover"] = {**self.rover, "state": self.rover_state}
         if self.rover and self.astronaut:

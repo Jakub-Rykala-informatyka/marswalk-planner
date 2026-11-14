@@ -36,11 +36,25 @@
       "png_white": 1.0,
       "min": 0.5287150144577026,
       "max": 1.0
+    },
+    "dose_rate": {
+      "unit": "uSv/h",
+      "png_black": 13.333333333333334,
+      "png_white": 26.666666666666668,
+      "min": 14.099066734313965,
+      "max": 26.66666603088379
     }
   },
   "slope_classes": {
     "clear": "below 15 deg",
     "amber": "15 to 25 deg",
     "red": "25 deg and above"
+  },
+  "dose_model": {
+    "open_ground_uSv_per_h": 26.666666666666668,
+    "source": "MSL RAD, Hassler et al. 2014, Science 343, 1244797: 0.64 mSv/day",
+    "formula": "dose_rate = open_ground_rate * sky_view",
+    "limits": "galactic cosmic rays only; ignores the angular spread of the flux, secondary particles from the ground and solar particle events",
+    "dose_shelter_png": "transparent above 97 % of the open-ground dose, full teal at 70 % and below"
   }
 }

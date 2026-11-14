@@ -6,6 +6,7 @@ const LAYERS = [
   { id: "slope_classes", name: "Walkability (slope)", file: "/data/layers/slope_classes.png", opacity: 0.8, on: true, legend: true },
   { id: "slope", name: "Slope", file: "/data/layers/slope.png", opacity: 0.6 },
   { id: "roughness", name: "Roughness", file: "/data/layers/roughness.png", opacity: 0.6 },
+  { id: "dose_shelter", name: "Radiation shelter", file: "/data/layers/dose_shelter.png", opacity: 0.9, legend: "shelter-legend" },
   { id: "sky_view", name: "Open sky", file: "/data/layers/sky_view.png", opacity: 0.6 },
 ];
 
@@ -60,7 +61,7 @@ async function main() {
     toggle.checked = Boolean(layer.on);
     const refresh = () => {
       toggle.checked ? overlay.addTo(map) : overlay.remove();
-      if (layer.legend) $("legend").hidden = !toggle.checked;
+      if (layer.legend) $(layer.legend === true ? "legend" : layer.legend).hidden = !toggle.checked;
     };
     toggle.addEventListener("change", refresh);
     slider.addEventListener("input", () => overlay.setOpacity(Number(slider.value)));
@@ -112,7 +113,15 @@ async function main() {
     if (points.length > TRAIL_POINTS) trail.setLatLngs(points.slice(-TRAIL_POINTS));
   }
 
+  let lastTime = null;
   function show(message) {
+    // Simulation time going backwards means a new walk: drop the old trails
+    if (message.t !== null && lastTime !== null && message.t < lastTime - 1) {
+      astronautTrail.setLatLngs([]);
+      roverTrail.setLatLngs([]);
+    }
+    if (message.t !== null) lastTime = message.t;
+
     $("link").className = `pill ${message.live ? "online" : "offline"}`;
     $("link").textContent = message.live ? "Live from ROS 2" : "No telemetry";
 
@@ -135,6 +144,13 @@ async function main() {
       const { walked, total } = routeProgress(route, astronaut.x, astronaut.y);
       $("progress").style.width = `${(100 * walked) / total}%`;
       $("progress-text").textContent = `${fmt(walked)} of ${fmt(total)} m`;
+    }
+
+    const suit = message.suit;
+    if (suit) {
+      const share = suit.dose_rate_uSv_h / meta.dose_model.open_ground_uSv_per_h;
+      $("dose-rate").textContent = `${fmt(suit.dose_rate_uSv_h, 1)} µSv/h (${fmt(share * 100)} %)`;
+      $("dose-total").textContent = `${fmt(suit.dose_uSv, 2)} µSv`;
     }
 
     const rover = message.rover;
