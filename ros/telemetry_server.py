@@ -70,6 +70,7 @@ class Telemetry(Node):
         self.goal_pub = self.create_publisher(PoseStamped, "/goal_pose", 10)
         self.config_pub = self.create_publisher(String, "/rover/config", LATCHED)
         self.mission_start_pub = self.create_publisher(Empty, "/mission/start", 10)
+        self.mission_select_pub = self.create_publisher(String, "/mission/select", 10)
         self.arm_pub = self.create_publisher(JointState, "/rover/arm/command", 10)
         self.arm = None
         self.create_subscription(JointState, "/rover/arm/joint_states", self.on_arm, 10)
@@ -205,6 +206,17 @@ def array_bytes(data):
     return data.tobytes() if hasattr(data, "tobytes") else bytes(v & 0xFF for v in data)
 
 
+async def missions(request):
+    """Mission files in data/ with their names, for the picker."""
+    found = []
+    for path in sorted((ROOT / "data").glob("mission_*.json")):
+        try:
+            found.append({"file": path.name, "name": json.loads(path.read_text())["name"]})
+        except (OSError, ValueError, KeyError):
+            continue
+    return web.json_response(found, headers={"Cache-Control": "no-store"})
+
+
 async def mission(request):
     return web.json_response(request.app["telemetry"].mission[1], headers={"Cache-Control": "no-store"})
 
@@ -263,6 +275,8 @@ async def websocket(request):
                     request.app["telemetry"].publish_goal(data["goal"]["x"], data["goal"]["y"])
                 if data.get("arm_command"):  # arm sliders and presets in the cameras tab
                     request.app["telemetry"].command_arm(data["arm_command"])
+                if data.get("mission_select"):  # the mission picker
+                    request.app["telemetry"].mission_select_pub.publish(String(data=str(data["mission_select"])))
                 if data.get("mission_start"):  # the mission tab
                     request.app["telemetry"].mission_start_pub.publish(Empty())
                 if data.get("rover_config"):  # the rover planner tab
@@ -313,6 +327,7 @@ def main():
     app.router.add_get("/route", route)
     app.router.add_get("/points", points)
     app.router.add_get("/mission", mission)
+    app.router.add_get("/missions", missions)
     app.router.add_get("/mission/route", lambda request: web.json_response(request.app["telemetry"].mission_route))
     app.router.add_get("/camera/{name}", camera)
     app.router.add_static("/app", ROOT / "app")

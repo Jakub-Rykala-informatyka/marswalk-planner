@@ -60,6 +60,8 @@ class MissionPlanner(Node):
             self.create_subscription(OccupancyGrid, topic, lambda msg, k=key: self.on_grid(k, msg), LATCHED)
         self.create_subscription(String, "/rover/config", self.on_config, LATCHED)
         self.create_subscription(Empty, "/mission/start", self.on_start, 10)
+        # The dashboard's mission picker: a file name under data/, e.g. "mission_test.json"
+        self.create_subscription(String, "/mission/select", self.on_select, 10)
         self.plan_pub = self.create_publisher(String, "/mission/plan", LATCHED)
         self.route_pub = self.create_publisher(Path, "/mission/route", LATCHED)
         self.walk_route_pub = self.create_publisher(Path, "/route", LATCHED)
@@ -71,6 +73,15 @@ class MissionPlanner(Node):
 
     def on_config(self, msg):
         self.config = json.loads(msg.data)
+        self.replan()
+
+    def on_select(self, msg):
+        path = ROOT / "data" / FilePath(msg.data).name  # only files in data/
+        if not path.name.startswith("mission_") or not path.exists():
+            self.get_logger().warn(f"no mission file {msg.data}")
+            return
+        self.mission = json.loads(path.read_text())
+        self.get_logger().info(f"mission selected: {self.mission['name']}")
         self.replan()
 
     def on_start(self, _msg):

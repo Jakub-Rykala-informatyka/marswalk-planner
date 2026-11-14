@@ -232,6 +232,12 @@ MISSION=data/mission_test.json ./scripts/run_dashboard.sh   # short 2-target mis
 ./scripts/ros_shell.sh ros2 topic pub --once /mission/start std_msgs/msg/Empty "{}"
 ```
 
+In the dashboard's Mission tab the mission can be switched without a restart
+(the picker lists `data/mission_*.json` and sends the file name on
+`/mission/select`, `std_msgs/String`), started with "Start mission walk", and
+followed in the live banner and the mission log, one row per phase change in
+simulation time.
+
 Keep the walk at 1.2 m/s or below: the rover is capped at 1.5 m/s, faster it
 leaves the route and tips over. The Jackal carries 45 kg of ballast low in the
 chassis so the arm does not make it top-heavy. If it still tips over, or sits

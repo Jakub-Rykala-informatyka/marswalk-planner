@@ -74,11 +74,16 @@
 
   <div id="mission" class="tab-panel" hidden>
     <div class="mission-actions">
+      <label class="mission-pick">Mission <select id="mission-select"></select></label>
       <button type="button" id="mission-start">Start mission walk</button>
       <button type="button" id="mission-show">Show on 3D map</button>
       <span id="mission-sent"></span>
     </div>
     <div id="mission-live" class="mission-live" hidden></div>
+    <details id="mission-log-box" class="mission-log" hidden open>
+      <summary>Mission log (simulation time)</summary>
+      <table class="timeline"><thead><tr><th>Time</th><th>What happened</th></tr></thead><tbody id="mission-log"></tbody></table>
+    </details>
     <div id="mission-body"><p class="note">Waiting for /mission/plan from ROS 2.</p></div>
   </div>
 

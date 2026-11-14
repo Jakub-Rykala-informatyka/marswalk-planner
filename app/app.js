@@ -480,6 +480,20 @@ async function main() {
     }
   }
 
+  // Mission picker: switches the mission planner's mission over /mission/select
+  fetch("/missions").then((r) => r.json()).then((list) => {
+    for (const mission of list) {
+      const option = new Option(mission.name, mission.file);
+      option.selected = mission.file === "mission_boxwork.json";
+      $("mission-select").append(option);
+    }
+  });
+  $("mission-select").addEventListener("change", () => {
+    if (socket?.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ mission_select: $("mission-select").value }));
+    $("mission-sent").textContent = "Mission changed: planning…";
+  });
+
   $("mission-start").addEventListener("click", () => {
     const ok = socket?.readyState === WebSocket.OPEN;
     if (ok) socket.send(JSON.stringify({ mission_start: true }));
@@ -542,6 +556,22 @@ async function main() {
   let pointsVersion = null;
   let pointsLoading = false;
   let lastTime = null;
+
+  // Mission log: one row per change of phase, target or arm step, in simulation time
+  let lastLogKey = null;
+  function logProgress(progress, t) {
+    const key = progress ? `${progress.phase}|${progress.target}|${progress.arm_step}` : null;
+    if (!progress || progress.phase === "free walk" || key === lastLogKey) return;
+    // A walk to the first target with nothing done yet = a new mission walk: start a new log
+    if (progress.phase === "walking" && progress.done === 0) $("mission-log").replaceChildren();
+    lastLogKey = key;
+    const row = document.createElement("tr");
+    const clock = t === null ? "–" : `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+    row.innerHTML = `<td>${clock}</td><td></td>`;
+    row.lastChild.textContent = $("mission-live").firstChild?.textContent ?? progress.phase;
+    $("mission-log").append(row);
+    $("mission-log-box").hidden = false;
+  }
 
   const ARM_STEPS = { forward: "reaching out", ground: "taking the sample", sample_box: "storing the sample", stow: "stowing" };
   function showProgress(progress) {
@@ -664,6 +694,7 @@ async function main() {
     }
     if (message.suit) showSuit(message.suit);
     showProgress(message.mission_progress);
+    if (message.live) logProgress(message.mission_progress, message.t); // stale values from a stopped run stay out
     updateFeeds(message.cameras);
     showArm(message.arm);
 
