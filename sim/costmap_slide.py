@@ -48,6 +48,57 @@ RAMP = [(242, 234, 216), (222, 150, 74), (150, 52, 40), (52, 16, 30)]  # cheap t
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
+# Polish text for --lang pl, keyed by the English text
+PL = {
+    "From NASA data to a safe walking route": "Od danych NASA do bezpiecznej trasy pieszej",
+    "Gale crater, lower Mount Sharp: 2 x 2 km HiRISE patch, 2 m cells. The same code runs live in our ROS 2 cost map and planner nodes.":
+        "Krater Gale, podnóże Mount Sharp: wycinek HiRISE 2 × 2 km, komórki 2 m. Ten sam kod działa na żywo w naszych węzłach ROS 2.",
+    "NASA data": "Dane NASA",
+    "Cost of each factor": "Koszt każdego czynnika",
+    "Cost map": "Mapa kosztów",
+    "A* route": "Trasa A*",
+    "Radiation dose rate": "Moc dawki promieniowania",
+    "MSL RAD 0.64 mSv/day x open sky\n14–27 µSv/h (model)": "MSL RAD 0,64 mSv/dobę × otwarte niebo\n14–27 µSv/h (model)",
+    "Surface roughness": "Szorstkość powierzchni",
+    "HiRISE DTM, 1 m posts\n0–2 m bumps per cell": "HiRISE DTM, siatka 1 m\nnierówności 0–2 m w komórce",
+    "Terrain slope": "Nachylenie terenu",
+    "HiRISE DTM, 1 m posts\n0–45° (white = steep)": "HiRISE DTM, siatka 1 m\n0–45° (biały = stromo)",
+    "Dose cost  × 10": "Koszt dawki  × 10",
+    "more open sky = more dose": "więcej otwartego nieba = większa dawka",
+    "Roughness cost  × 15": "Koszt szorstkości  × 15",
+    "keep out from {} m": "wykluczone od {} m",
+    "Slope cost  × 70": "Koszt nachylenia  × 70",
+    "easy below {}°, keep out from {}°": "łatwo poniżej {}°, wykluczone od {}°",
+    "Sum per cell, 0–99": "Suma w komórce, 0–99",
+    "red = keep out ({} of the patch)": "czerwone = wykluczone ({} terenu)",
+    "easy": "łatwo",
+    "hard": "trudno",
+    "no go": "zakaz",
+    "Cheapest path, 8 neighbours": "Najtańsza ścieżka, 8 sąsiadów",
+    "a step costs its length × (1 + cost / 25)": "krok kosztuje: długość × (1 + koszt / 25)",
+    "Rover parking →": "Parking łazika →",
+    "Boxwork field, west": "Pole boxwork, zachód",
+    "walk ({} m straight line)": "marszu ({} m w linii prostej)",
+    "at {} m/s in a suit": "przy {} m/s w skafandrze",
+    "dose on the way (model)": "dawka na trasie (model)",
+    "HUD and rover": "HUD i łazik",
+    "cost = 70·slope + 15·roughness + 10·dose   (each term 0–1; red cells are never entered)":
+        "koszt = 70·nachylenie + 15·szorstkość + 10·dawka   (każdy składnik 0–1; trasa omija czerwone komórki)",
+    "Weights and limits are our assumptions. Dose is a model from RAD, not a measurement at each place.":
+        "Wagi i limity to nasze założenia. Dawka to model oparty na RAD, a nie pomiar w każdym miejscu.",
+}
+LANG = "en"
+
+
+def t(text):
+    return PL.get(text, text) if LANG == "pl" else text
+
+
+def num(value):
+    """A number as text, with a decimal comma in Polish."""
+    text = f"{value:g}"
+    return text.replace(".", ",") if LANG == "pl" else text
+
 
 def font(size, bold=False):
     return ImageFont.truetype(BOLD if bold else FONT, size)
@@ -221,16 +272,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--style", choices=["flat", "isaac"], default="flat",
                         help="flat tilted maps, or the Isaac Sim renders on the 3D terrain")
+    parser.add_argument("--lang", choices=["en", "pl"], default="en")
     args = parser.parse_args()
-    out = SLIDES / ("costmap_pipeline_3d.png" if args.style == "isaac" else "costmap_pipeline.png")
+    global LANG
+    LANG = args.lang
+    name = "costmap_pipeline" + ("_3d" if args.style == "isaac" else "") + ("_pl" if args.lang == "pl" else "")
+    out = SLIDES / f"{name}.png"
     raw, terms, total, points, cell, stats, p = compute()
     n = total.shape[0]
 
     slide = Image.new("RGBA", (W, H), BG + (255,))
     draw = ImageDraw.Draw(slide)
-    draw.text((70, 52), "From NASA data to a safe walking route", font=font(46, bold=True), fill=INK)
-    draw.text((72, 114), "Gale crater, lower Mount Sharp: 2 x 2 km HiRISE patch, 2 m cells. "
-                         "The same code runs live in our ROS 2 cost map and planner nodes.",
+    draw.text((70, 52), t("From NASA data to a safe walking route"), font=font(46, bold=True), fill=INK)
+    draw.text((72, 114), t("Gale crater, lower Mount Sharp: 2 x 2 km HiRISE patch, 2 m cells. "
+                           "The same code runs live in our ROS 2 cost map and planner nodes."),
               font=font(21), fill=MUTED)
 
     def place(tile, name, image):
@@ -251,24 +306,24 @@ def main():
     col1, col2 = 70, 600
 
     # 1. NASA data, top to bottom: radiation, surface, terrain (as in the sketch)
-    step_header(draw, col1, 186, 1, "NASA data")
+    step_header(draw, col1, 186, 1, t("NASA data"))
     inputs = [
-        (grid_to_image(grey(raw["dose_rate"], 14.0, 26.7)), "Radiation dose rate",
-         "MSL RAD 0.64 mSv/day x open sky\n14–27 µSv/h (model)"),
-        (grid_to_image(grey(raw["roughness"], 0.0, 2.0)), "Surface roughness",
-         "HiRISE DTM, 1 m posts\n0–2 m bumps per cell"),
-        (grid_to_image(grey(raw["slope"], 0.0, 45.0)), "Terrain slope",
-         "HiRISE DTM, 1 m posts\n0–45° (white = steep)"),
+        (grid_to_image(grey(raw["dose_rate"], 14.0, 26.7)), t("Radiation dose rate"),
+         t("MSL RAD 0.64 mSv/day x open sky\n14–27 µSv/h (model)")),
+        (grid_to_image(grey(raw["roughness"], 0.0, 2.0)), t("Surface roughness"),
+         t("HiRISE DTM, 1 m posts\n0–2 m bumps per cell")),
+        (grid_to_image(grey(raw["slope"], 0.0, 45.0)), t("Terrain slope"),
+         t("HiRISE DTM, 1 m posts\n0–45° (white = steep)")),
     ]
     factors = [
-        (terms["dose"] / p["dose_weight"], None, "Dose cost  × 10",
-         "more open sky = more dose"),
-        (terms["roughness"] / p["roughness_weight"], raw["roughness"] >= p["max_roughness_m"], "Roughness cost  × 15",
-         f"keep out from {p['max_roughness_m']:g} m"),
-        (terms["slope"] / p["slope_weight"], raw["slope"] >= p["max_slope_deg"], "Slope cost  × 70",
-         f"easy below {p['comfort_slope_deg']:g}°, keep out from {p['max_slope_deg']:g}°"),
+        (terms["dose"] / p["dose_weight"], None, t("Dose cost  × 10"),
+         t("more open sky = more dose")),
+        (terms["roughness"] / p["roughness_weight"], raw["roughness"] >= p["max_roughness_m"], t("Roughness cost  × 15"),
+         t("keep out from {} m").format(num(p["max_roughness_m"]))),
+        (terms["slope"] / p["slope_weight"], raw["slope"] >= p["max_slope_deg"], t("Slope cost  × 70"),
+         t("easy below {}°, keep out from {}°").format(num(p["comfort_slope_deg"]), num(p["max_slope_deg"]))),
     ]
-    step_header(draw, col2, 186, 2, "Cost of each factor")
+    step_header(draw, col2, 186, 2, t("Cost of each factor"))
 
     tiles2 = []
     for name, row, (image, title, detail), (share, banned, ftitle, fdetail) in zip(
@@ -288,27 +343,27 @@ def main():
 
     # 3. Cost map: the weighted sum, with keep-out cells in red
     col3, row3, bw, bd, bsk = 1070, 240, 400, bd3, 90
-    step_header(draw, col3, 186, 3, "Cost map")
+    step_header(draw, col3, 186, 3, t("Cost map"))
     rgb = ramp(np.minimum(total, 99) / 99)
     rgb[total == 100] = KEEP_OUT
     cost_tile = Tile(col3, row3, bw, bd, bsk)
     place(cost_tile, "cost_map", grid_to_image(rgb))
     for t2 in tiles2:
         arrow(draw, (t2.right[0] + 30, t2.right[1]), (cost_tile.left[0] - 22, cost_tile.left[1]))
-    label(draw, (col3, row3 + bd + 12), "Sum per cell, 0–99",
-          f"red = keep out ({stats['keep_out']:.0%} of the patch)")
+    label(draw, (col3, row3 + bd + 12), t("Sum per cell, 0–99"),
+          t("red = keep out ({} of the patch)").format(f"{stats['keep_out']:.0%}"))
 
     # Colour key under the cost map
     key_x, key_y, key_w = col3, row3 + bd + 82, 300
     key = Image.fromarray(np.repeat(ramp(np.linspace(0, 1, key_w))[None], 12, axis=0)).convert("RGBA")
     slide.alpha_composite(key, (key_x, key_y))
     draw.rectangle([key_x + key_w + 40, key_y, key_x + key_w + 66, key_y + 12], fill=KEEP_OUT)
-    draw.text((key_x, key_y + 18), "easy", font=font(16), fill=MUTED)
-    draw.text((key_x + key_w, key_y + 18), "hard", font=font(16), fill=MUTED, anchor="ra")
-    draw.text((key_x + key_w + 53, key_y + 18), "no go", font=font(16), fill=MUTED, anchor="ma")
+    draw.text((key_x, key_y + 18), t("easy"), font=font(16), fill=MUTED)
+    draw.text((key_x + key_w, key_y + 18), t("hard"), font=font(16), fill=MUTED, anchor="ra")
+    draw.text((key_x + key_w + 53, key_y + 18), t("no go"), font=font(16), fill=MUTED, anchor="ma")
 
     # 4. Route: A* over the cost map, drawn on the orthophoto
-    step_header(draw, col3, 626, 4, "A* route")
+    step_header(draw, col3, 626, 4, t("A* route"))
     ortho = Image.open(ROOT / "media/screens/layers/flat/ortofoto.png").convert("RGBA").resize((n, n), Image.BICUBIC)
     no_go = np.zeros((n, n, 4), np.uint8)
     no_go[np.flipud(total == 100)] = KEEP_OUT + (120,)
@@ -321,31 +376,31 @@ def main():
     route_tile = Tile(col3, row4, bw, bd4, bsk)
     place(route_tile, "route", ortho)
     arrow(draw, (key_x + key_w / 2 + 60, key_y + 48), (key_x + key_w / 2 + 60, row4 - 70))
-    label(draw, (col3, row4 + bd4 + 12), "Cheapest path, 8 neighbours",
-          "a step costs its length × (1 + cost / 25)")
+    label(draw, (col3, row4 + bd4 + 12), t("Cheapest path, 8 neighbours"),
+          t("a step costs its length × (1 + cost / 25)"))
 
     # Route numbers and where the route goes next
     px0 = col3 + bsk + bw + 40
-    draw.text((px0, row4 - 4), "Rover parking →", font=font(20), fill=MUTED)
-    draw.text((px0, row4 + 22), stats["target"], font=font(20, bold=True), fill=INK)
+    draw.text((px0, row4 - 4), t("Rover parking →"), font=font(20), fill=MUTED)
+    draw.text((px0, row4 + 22), t(stats["target"]), font=font(20, bold=True), fill=INK)
     figures = [
-        (f"{stats['length']:.0f} m", f"walk ({stats['straight']:.0f} m straight line)"),
-        (f"{stats['minutes']:.0f} min", f"at {WALK_SPEED:g} m/s in a suit"),
-        (f"{stats['dose']:.0f} µSv", "dose on the way (model)"),
+        (f"{stats['length']:.0f} m", t("walk ({} m straight line)").format(f"{stats['straight']:.0f}")),
+        (f"{stats['minutes']:.0f} min", t("at {} m/s in a suit").format(num(WALK_SPEED))),
+        (f"{stats['dose']:.0f} µSv", t("dose on the way (model)")),
     ]
     for i, (big, small) in enumerate(figures):
         y = row4 + 70 + i * 66
         draw.text((px0, y), big, font=font(32, bold=True), fill=ACCENT)
         draw.text((px0, y + 38), small, font=font(16), fill=MUTED)
     arrow(draw, (px0, row4 + 290), (px0 + 70, row4 + 290), colour=ACCENT)
-    draw.text((px0 + 84, row4 + 290), "HUD and rover", font=font(20, bold=True), fill=INK, anchor="lm")
+    draw.text((px0 + 84, row4 + 290), t("HUD and rover"), font=font(20, bold=True), fill=INK, anchor="lm")
 
     # Footer: the formula and the honest caveats
     draw.line([(70, 996), (W - 70, 996)], fill=(255, 255, 255, 40), width=1)
-    draw.text((70, 1010), "cost = 70·slope + 15·roughness + 10·dose   (each term 0–1; red cells are never entered)",
+    draw.text((70, 1010), t("cost = 70·slope + 15·roughness + 10·dose   (each term 0–1; red cells are never entered)"),
               font=font(19, bold=True), fill=INK)
-    draw.text((70, 1050), "Weights and limits are our assumptions. Dose is a model from RAD, "
-                          "not a measurement at each place.", font=font(16), fill=MUTED)
+    draw.text((70, 1050), t("Weights and limits are our assumptions. Dose is a model from RAD, "
+                            "not a measurement at each place."), font=font(16), fill=MUTED)
 
     out.parent.mkdir(parents=True, exist_ok=True)
     slide.convert("RGB").save(out, optimize=True)
