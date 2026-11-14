@@ -1,0 +1,25 @@
+{
+  "source_dtm": "DTEEC_001488_1750_001752_1750_U02.IMG",
+  "source_ortho": "PSP_001752_1750_RED_C_01_ORTHO.JP2",
+  "crop_px": {
+    "line": 8600,
+    "sample": 2000,
+    "size": 2048,
+    "step": 2
+  },
+  "cell_m": 2.023493589159,
+  "size_m": 2072.057435298816,
+  "grid": [
+    1025,
+    1025
+  ],
+  "elevation_of_z0_m": -3875.568115234375,
+  "relief_m": 446.767333984375,
+  "bounds_deg": {
+    "north": -4.867324880999617,
+    "south": -4.902281743233865,
+    "west": 137.27307399893823,
+    "east": 137.30803086117248
+  },
+  "frame": "local metres, origin south-west corner, x east, y north, z up"
+}

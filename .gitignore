@@ -32,3 +32,7 @@ log/
 # Isaac Sim caches
 *.usd.bak
 .thumbs/
+
+# generated locally, rebuild with sim/prepare_terrain.py and sim/build_scene.py
+data/preview/
+data/terrain/*.usd
