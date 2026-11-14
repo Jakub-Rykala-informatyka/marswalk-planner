@@ -4,11 +4,55 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Marswalk Planner</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/app/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-  <main id="map" aria-label="Map of the terrain patch"></main>
+  <main id="main">
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" class="tab active" data-tab="view" aria-selected="true">3D map</button>
+    <button type="button" role="tab" class="tab" data-tab="cameras" aria-selected="false">Cameras</button>
+  </nav>
+
+  <div id="view" class="tab-panel" aria-label="3D view of the terrain patch">
+    <div class="view-tools">
+      <label><input type="checkbox" id="follow" checked> Follow astronaut</label>
+      <label><input type="checkbox" id="show-points" checked> Rover lidar</label>
+      <button type="button" id="overview">Overview</button>
+    </div>
+    <div class="cursor-readout" id="readout" hidden></div>
+    <div class="alert" id="alert" hidden></div>
+  </div>
+
+  <div id="cameras" class="tab-panel" hidden>
+    <figure class="feed">
+      <div class="frame">
+        <img id="camera-astronaut" alt="Helmet camera of the astronaut">
+        <div class="hud">
+          <span id="hud-target">Target –</span>
+          <span id="hud-margin">O₂ margin –</span>
+          <span id="hud-rover">Rover –</span>
+        </div>
+        <p class="no-signal" id="nosignal-astronaut">No signal</p>
+      </div>
+      <figcaption><span class="dot astronaut"></span>Helmet camera · <span id="age-astronaut">–</span></figcaption>
+    </figure>
+    <figure class="feed">
+      <div class="frame">
+        <img id="camera-rover" alt="Front camera of the support rover">
+        <p class="no-signal" id="nosignal-rover">No signal</p>
+      </div>
+      <figcaption><span class="dot rover"></span>Rover front camera · <span id="age-rover">–</span></figcaption>
+    </figure>
+  </div>
+  </main>
 
   <aside id="panel">
     <header>
@@ -30,16 +74,18 @@
       <p class="row"><span>Length</span><b id="plan-length">–</b></p>
       <p class="row"><span>Walking time</span><b id="plan-time">–</b></p>
       <p class="row"><span>Expected dose</span><b id="plan-dose">–</b></p>
-      <p class="note">Click the map to set a new science target.</p>
+      <p class="note">Click the terrain to set a new science target.</p>
     </section>
 
     <section>
-      <h2><span class="dot astronaut"></span>Astronaut</h2>
-      <p class="row"><span>Position</span><b id="astronaut-position">–</b></p>
-      <p class="row"><span>Elevation</span><b id="astronaut-elevation">–</b></p>
-      <p class="row"><span>Heading</span><b id="astronaut-heading">–</b></p>
-      <p class="row"><span>Ground slope</span><b id="astronaut-slope">–</b></p>
-      <p class="row"><span>Open sky</span><b id="astronaut-sky">–</b></p>
+      <h2>Suit and safe return</h2>
+      <p class="row"><span>Oxygen</span><b id="suit-o2">–</b></p>
+      <div class="bar"><div id="o2-bar"></div></div>
+      <p class="row"><span>Battery</span><b id="suit-battery">–</b></p>
+      <p class="row"><span>Back to crew rover</span><b id="suit-return">–</b></p>
+      <p class="row"><span>Oxygen margin</span><b id="suit-margin">–</b></p>
+      <p class="note">Margin = oxygen left − walk back − 30 min reserve.
+        Consumption rates are assumptions, not suit data.</p>
     </section>
 
     <section>
@@ -51,10 +97,18 @@
     </section>
 
     <section>
+      <h2><span class="dot astronaut"></span>Astronaut</h2>
+      <p class="row"><span>Position</span><b id="astronaut-position">–</b></p>
+      <p class="row"><span>Elevation</span><b id="astronaut-elevation">–</b></p>
+      <p class="row"><span>Heading</span><b id="astronaut-heading">–</b></p>
+      <p class="row"><span>Ground slope</span><b id="astronaut-slope">–</b></p>
+    </section>
+
+    <section>
       <h2><span class="dot rover"></span>Support rover</h2>
       <p class="row"><span>State</span><b id="rover-state">–</b></p>
       <p class="row"><span>Distance to astronaut</span><b id="rover-distance">–</b></p>
-      <p class="row"><span>Position</span><b id="rover-position">–</b></p>
+      <p class="row"><span>Lidar points</span><b id="rover-points">–</b></p>
     </section>
 
     <section>
@@ -80,7 +134,6 @@
     </footer>
   </aside>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/app/app.js"></script>
+  <script type="module" src="/app/app.js"></script>
 </body>
 </html>

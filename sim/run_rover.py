@@ -14,6 +14,7 @@ import argparse
 import csv
 import json
 import math
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,7 @@ from omni.kit.viewport.utility import get_active_viewport
 from pxr import Gf, UsdGeom
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 TERRAIN = ROOT / "data" / "terrain"
 USD_PATH = TERRAIN / "mars_gale.usd"
 FRAMES = ROOT / "media" / "frames"
@@ -157,24 +159,26 @@ class RosPublisher:
                 return self.poll_route()
         return None
 
-    def _pose(self, stamp, position, yaw):
+    def _pose(self, stamp, position, quat_wxyz):
         PoseStamped = self._types[0]
         msg = PoseStamped()
         msg.header.stamp = stamp
         msg.header.frame_id = "map"
         msg.pose.position.x, msg.pose.position.y, msg.pose.position.z = (float(v) for v in position)
-        msg.pose.orientation.z = math.sin(yaw / 2)
-        msg.pose.orientation.w = math.cos(yaw / 2)
+        o = msg.pose.orientation
+        o.w, o.x, o.y, o.z = (float(v) for v in quat_wxyz)
         return msg
 
-    def publish(self, t, astronaut_position, astronaut_yaw, rover_position, rover_yaw, state):
+    def publish(self, t, astronaut_position, astronaut_yaw, rover_position, rover_orientation, state):
         _, Clock, String = self._types
         clock = Clock()
         clock.clock.sec = int(t)
         clock.clock.nanosec = int((t - int(t)) * 1e9)
         self.clock.publish(clock)
-        self.astronaut.publish(self._pose(clock.clock, astronaut_position, astronaut_yaw))
-        self.rover.publish(self._pose(clock.clock, rover_position, rover_yaw))
+        heading = (math.cos(astronaut_yaw / 2), 0.0, 0.0, math.sin(astronaut_yaw / 2))
+        self.astronaut.publish(self._pose(clock.clock, astronaut_position, heading))
+        # Full rover attitude, so the lidar points can be put into the map frame
+        self.rover.publish(self._pose(clock.clock, rover_position, rover_orientation))
         self.rover_state.publish(String(data=state))
 
     def close(self):
@@ -203,6 +207,10 @@ rover = SingleArticulation(
     orientation=np.array([math.cos(start_yaw / 2), 0.0, 0.0, math.sin(start_yaw / 2)]),
 )
 world.scene.add(rover)
+if ros:
+    from sensors import add_sensors, place_helmet_camera
+
+    add_sensors(world.stage, "/World/Rover")
 
 # Astronaut marker: no physics, placed on the terrain every step
 astronaut = UsdGeom.Capsule.Define(world.stage, "/World/Astronaut")
@@ -295,7 +303,8 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
             set_camera(camera_op, position - 3.0 * forward + np.array([0.0, 0.0, 1.3]),
                        position + 4.0 * forward + np.array([0.0, 0.0, 0.3]))
         if ros:
-            ros.publish(t, (*astronaut_xy, astronaut_z), astronaut_yaw, position, yaw, state)
+            ros.publish(t, (*astronaut_xy, astronaut_z), astronaut_yaw, position, orientation, state)
+            place_helmet_camera(world.stage, (*astronaut_xy, astronaut_z + EYE_HEIGHT), astronaut_yaw)
         log.writerow([f"{t:.2f}", f"{astronaut_xy[0]:.2f}", f"{astronaut_xy[1]:.2f}",
                       f"{position[0]:.2f}", f"{position[1]:.2f}", f"{position[2]:.2f}",
                       f"{math.degrees(yaw):.1f}", f"{astronaut_s - rover_s:.1f}", state])

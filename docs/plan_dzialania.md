@@ -37,6 +37,10 @@ Kuba ma teraz najwięcej zadań. Jeśli zabraknie czasu, pierwsze do oddania Raf
 | Mapy kosztów `/costmap/walk` i `/costmap/rover` z warstw `/nasa/*`, parametry ROS | gotowe |
 | Planer A* na `/costmap/walk`, trasa `/route` z budżetem (długość, czas, dawka) | gotowe |
 | Nowy cel kliknięciem w mapę, symulacja zmienia trasę w trakcie przejścia | gotowe |
+| Budżet skafandra: tlen, bateria, droga powrotu do łazika, alert „turn back” (`/suit/status`) | gotowe |
+| Dashboard 3D w Three.js zamiast mapy 2D | gotowe |
+| Lidar na łaziku (`/rover/points`) nałożony na widok 3D | gotowe |
+| Kamery kasku i łazika w ROS 2, druga zakładka dashboardu z nakładką HUD | gotowe |
 
 Uruchomienie:
 
@@ -50,7 +54,7 @@ Uruchomienie:
 1. ~~Trzeci rodzaj danych~~: zrobione. Mamy wysokości i zdjęcia z HiRISE oraz promieniowanie z RAD.
 2. ~~Mapa kosztów na tematach ROS~~: zrobione. Węzeł `costmap` subskrybuje `/nasa/*` i publikuje `/costmap/walk` i `/costmap/rover`; wagi i limity zmienia się parametrami ROS na żywo.
 3. ~~Planer na tematach ROS~~: zrobione. Węzeł `planner` publikuje `/route` i `/route/summary`; cel ustawia się kliknięciem w mapę na dashboardzie.
-4. **Budżet wyjścia.** Tlen, dawka i zapas na powrót do łazika, pokazane na dashboardzie i w HUD-zie.
+4. ~~Budżet wyjścia~~: zrobione. Węzeł `suit_monitor` publikuje `/suit/status`. Rafał może brać te same pola do HUD-u w okularach.
 5. **HUD.** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard.
 6. **Łazik osobowy i ramię** w symulacji.
 7. **Scenariusz burzy słonecznej.**

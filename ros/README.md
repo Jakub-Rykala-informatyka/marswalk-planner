@@ -22,9 +22,11 @@ for another route.
 | Node | File | Subscribes | Publishes |
 | --- | --- | --- | --- |
 | `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | `/route` | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
+| sensor graph | `sim/sensors.py` (Isaac Sim) | – | `/rover/points`, `/rover/camera/image`, `/astronaut/camera/image` |
 | `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate` |
 | `dose_monitor` | `ros/dose_monitor.py` | `/nasa/dose_rate`, `/astronaut/pose` | `/astronaut/dose_rate`, `/astronaut/dose` |
 | `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
+| `suit_monitor` | `ros/suit_monitor.py` | `/astronaut/pose`, `/nasa/slope` | `/suit/status`, `/suit/return_point` |
 | `planner` | `ros/planner.py` | `/costmap/walk`, `/nasa/dose_rate`, `/astronaut/pose`, `/goal_pose` | `/route`, `/route/summary` |
 | `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser, `/goal_pose` from map clicks |
 
@@ -99,6 +101,29 @@ route from the astronaut's current position.
 | `/rover/state` | `std_msgs/String` | `following`, `waiting` or `arrived` |
 | `/astronaut/dose_rate` | `std_msgs/Float32` | µSv/h at the astronaut's position (from `dose_monitor`) |
 | `/astronaut/dose` | `std_msgs/Float32` | µSv since the walk started (from `dose_monitor`) |
+| `/rover/points` | `sensor_msgs/PointCloud2` | full scans of an RTX lidar (Ouster OS1, 32 channels) 0.45 m above the rover base, frame `rover_lidar`, about 2.4 Hz |
+| `/rover/camera/image` | `sensor_msgs/Image` | rover front camera, 640 × 360 RGB |
+| `/astronaut/camera/image` | `sensor_msgs/Image` | helmet camera at eye level, 640 × 360 RGB |
+
+`/rover/pose` carries the rover's full attitude (the astronaut's only its heading),
+so the lidar points can be put into the `map` frame.
+
+## Suit and safe return
+
+`suit_monitor` publishes `/suit/status`, a `std_msgs/String` with JSON:
+
+```json
+{"o2_pct": 99.8, "o2_left_min": 479.0, "battery_pct": 99.9, "walked_m": 27.0,
+ "return_point": [1141.0, 834.0], "return_m": 27.0, "return_min": 0.6,
+ "margin_min": 448.4, "turn_back": false, "slope_deg": 7.8}
+```
+
+Oxygen lasts `o2_hours` (8) at a steady walk on flat ground; standing uses
+`rest_factor` (0.6) of that and each degree of slope adds `slope_factor` (4 %).
+The return point is where the walk began (the parked crew rover); the way back
+is the distance walked so far at `walk_speed`. `margin_min` is oxygen left minus
+the walk back minus `reserve_min` (30), and `turn_back` is true when less than a
+quarter of the reserve is spare. All of these are assumptions set as parameters.
 
 Messages come 10 times per simulated second. The simulation runs at about 0.9 of
 real time on the hackathon laptop.
@@ -113,11 +138,23 @@ route files, so a pose indexes the layers directly:
 
 ## Not here yet
 
-Suit sensor nodes for oxygen and battery, a combined drive-and-walk plan on `/costmap/rover`, and the safe-return check.
+A combined drive-and-walk plan on `/costmap/rover`, and a way back planned on the cost map instead of retracing the walk.
 
 ## Dashboard
 
 `./scripts/run_dashboard.sh` starts `nasa_layers`, `dose_monitor`, `costmap`,
-`planner` and `ros/telemetry_server.py` in one container. The telemetry server serves the app
-on http://localhost:8080 and streams the topics above to the browser over
-WebSocket (`/ws`), five messages per second.
+`planner`, `suit_monitor` and `ros/telemetry_server.py` in one container. The
+telemetry server serves the app on http://localhost:8080 and streams the topics
+above to the browser over WebSocket (`/ws`), five messages per second. Bulk data
+has its own endpoints, fetched when the WebSocket message says it changed:
+
+| Endpoint | Content |
+| --- | --- |
+| `/costmap/walk`, `/costmap/rover` | one byte per cell, size in `X-Width` / `X-Height` |
+| `/route` | JSON list of `[x, y]` |
+| `/points` | latest lidar scan in the `map` frame, float32 x y z, at most 20 000 points |
+| `/camera/astronaut`, `/camera/rover` | latest camera frame as JPEG |
+
+The dashboard has two tabs: a 3D map (Three.js) with the terrain, layers,
+route, lidar points and markers, and the two camera feeds with a HUD overlay
+on the helmet camera.

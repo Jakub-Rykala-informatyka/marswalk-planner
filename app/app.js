@@ -1,17 +1,25 @@
-// Dashboard: terrain map with NASA-derived layers and live poses from ROS 2.
-// Map coordinates are the local frame of data/meta.json: metres, x east, y north.
+// Dashboard: 3D terrain with NASA-derived layers and live data from ROS 2.
+// Data uses the local frame of data/meta.json: metres, x east, y north, z up.
+// Three.js is y up, so a point (x, y, z) is drawn at (x, z, -y).
 
-const TRAIL_POINTS = 600;
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const MESH_STEP = 2; // use every 2nd height sample, about 4 m
+const TRAIL_POINTS = 2000;
 const LAYERS = [
-  { id: "slope_classes", name: "Walkability (slope)", file: "/data/layers/slope_classes.png", opacity: 0.8, on: true, legend: true },
+  { id: "slope_classes", name: "Walkability (slope)", file: "/data/layers/slope_classes.png", opacity: 0.8, on: true, legend: "legend" },
   { id: "slope", name: "Slope", file: "/data/layers/slope.png", opacity: 0.6 },
   { id: "roughness", name: "Roughness", file: "/data/layers/roughness.png", opacity: 0.6 },
   { id: "dose_shelter", name: "Radiation shelter", file: "/data/layers/dose_shelter.png", opacity: 0.9, legend: "shelter-legend" },
-  { id: "sky_view", name: "Open sky", file: "/data/layers/sky_view.png", opacity: 0.6 },
+  { id: "cost_walk", name: "Cost: walking", costmap: "walk", opacity: 0.7, legend: "cost-legend" },
+  { id: "cost_rover", name: "Cost: crew rover", costmap: "rover", opacity: 0.7, legend: "cost-legend" },
 ];
+const COLORS = { astronaut: 0x5fd4ff, rover: 0xffd23d, route: 0xffffff, goal: 0xff8a3d, crew: 0xeeeeee };
 
 const $ = (id) => document.getElementById(id);
 const fmt = (value, digits = 0) => value.toFixed(digits);
+const toScene = (x, y, z) => new THREE.Vector3(x, z, -y);
 
 // Read a float32 .npy grid; rows start at the south edge (see data/meta.json)
 async function loadGrid(url) {
@@ -22,18 +30,21 @@ async function loadGrid(url) {
   return { rows, cols, values: new Float32Array(buffer, 10 + headerLength) };
 }
 
-function sample(grid, cell, x, y) {
-  const ix = Math.round(x / cell), iy = Math.round(y / cell);
-  if (!grid || ix < 0 || iy < 0 || ix >= grid.cols || iy >= grid.rows) return null;
-  return grid.values[iy * grid.cols + ix];
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
 }
 
 function routeProgress(route, x, y) {
-  let best = 0, bestGap = Infinity, walked = 0, total = 0;
+  let gapBest = Infinity, walked = 0, total = 0;
   for (let i = 0; i < route.length; i++) {
     if (i) total += Math.hypot(route[i][0] - route[i - 1][0], route[i][1] - route[i - 1][1]);
     const gap = Math.hypot(route[i][0] - x, route[i][1] - y);
-    if (gap < bestGap) { bestGap = gap; best = i; walked = total; }
+    if (gap < gapBest) { gapBest = gap; walked = total; }
   }
   return { walked, total };
 }
@@ -41,141 +52,368 @@ function routeProgress(route, x, y) {
 async function main() {
   const meta = await (await fetch("/data/meta.json")).json();
   const terrain = await (await fetch("/data/terrain/meta.json")).json();
+  const heights = await loadGrid("/data/terrain/heights.npy");
+  const slopeGrid = await loadGrid("/data/layers/slope.npy");
   const size = meta.size_m, cell = meta.cell_m;
-  const bounds = [[0, 0], [size, size]];
 
   const b = meta.bounds_deg;
-  $("site-coords").textContent =
-    `${fmt(-(b.north + b.south) / 2, 2)}°S ${fmt((b.west + b.east) / 2, 2)}°E`;
+  $("site-coords").textContent = `${fmt(-(b.north + b.south) / 2, 2)}°S ${fmt((b.west + b.east) / 2, 2)}°E`;
   $("sources").textContent = `(${terrain.source_dtm.replace(".IMG", "")})`;
 
-  const map = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 4, zoomSnap: 0.25, attributionControl: false });
-  L.imageOverlay("/data/terrain/texture.jpg", bounds).addTo(map);
-  map.fitBounds(bounds);
+  const sample = (grid, x, y) => {
+    const ix = Math.round(x / cell), iy = Math.round(y / cell);
+    if (ix < 0 || iy < 0 || ix >= grid.cols || iy >= grid.rows) return null;
+    return grid.values[iy * grid.cols + ix];
+  };
+  const groundAt = (x, y) => {
+    const fx = Math.min(Math.max(x / cell, 0), heights.cols - 1.001);
+    const fy = Math.min(Math.max(y / cell, 0), heights.rows - 1.001);
+    const ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+    const h = (i, j) => heights.values[j * heights.cols + i];
+    return h(ix, iy) * (1 - tx) * (1 - ty) + h(ix + 1, iy) * tx * (1 - ty)
+      + h(ix, iy + 1) * (1 - tx) * ty + h(ix + 1, iy + 1) * tx * ty;
+  };
+
+  // --- Scene --------------------------------------------------------------
+  const view = $("view");
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  view.prepend(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xa38a72); // dusty Mars sky, an artistic choice
+  scene.fog = new THREE.Fog(0xa38a72, 2500, 6000);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 20000);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.48;
+  controls.minDistance = 8;
+  controls.maxDistance = 5000;
+
+  scene.add(new THREE.HemisphereLight(0xffe6cc, 0x3a2a20, 1.1));
+  const sun = new THREE.DirectionalLight(0xfff0dd, 2.2);
+  sun.position.set(-800, 900, 600);
+  scene.add(sun);
+
+  // Terrain mesh from the HiRISE height grid
+  const cols = Math.floor((heights.cols - 1) / MESH_STEP) + 1;
+  const rows = Math.floor((heights.rows - 1) / MESH_STEP) + 1;
+  const positions = new Float32Array(cols * rows * 3);
+  const uvs = new Float32Array(cols * rows * 2);
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      const k = j * cols + i, gx = i * MESH_STEP, gy = j * MESH_STEP;
+      positions.set([gx * cell, heights.values[gy * heights.cols + gx], -gy * cell], 3 * k);
+      uvs.set([gx / (heights.cols - 1), gy / (heights.rows - 1)], 2 * k);
+    }
+  }
+  const indices = [];
+  for (let j = 0; j < rows - 1; j++) {
+    for (let i = 0; i < cols - 1; i++) {
+      const a = j * cols + i, c = a + cols;
+      indices.push(a, a + 1, c, a + 1, c + 1, c);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  // Texture: HiRISE image with the enabled layers painted on top
+  const base = await loadImage("/data/terrain/texture.jpg");
+  const canvas = Object.assign(document.createElement("canvas"), { width: base.width, height: base.height });
+  const paint = canvas.getContext("2d");
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const terrainMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 }));
+  scene.add(terrainMesh);
+
+  const layerState = {};
+  function repaint() {
+    paint.globalAlpha = 1;
+    paint.drawImage(base, 0, 0);
+    for (const layer of LAYERS) {
+      const state = layerState[layer.id];
+      if (!state?.on || !state.image) continue;
+      paint.globalAlpha = state.opacity;
+      paint.drawImage(state.image, 0, 0, canvas.width, canvas.height);
+    }
+    texture.needsUpdate = true;
+    for (const id of ["legend", "cost-legend", "shelter-legend"]) {
+      $(id).hidden = !LAYERS.some((l) => l.legend === id && layerState[l.id]?.on);
+    }
+  }
 
   for (const layer of LAYERS) {
-    const overlay = L.imageOverlay(layer.file, bounds, { opacity: layer.opacity });
+    const state = (layerState[layer.id] = { on: Boolean(layer.on), opacity: layer.opacity, image: null });
+    if (layer.file) loadImage(layer.file).then((image) => { state.image = image; repaint(); });
     const label = document.createElement("label");
     label.innerHTML = `<input type="checkbox"><span>${layer.name}</span><input type="range" min="0" max="1" step="0.05" value="${layer.opacity}">`;
     const [toggle, slider] = label.querySelectorAll("input");
-    toggle.checked = Boolean(layer.on);
-    const refresh = () => {
-      toggle.checked ? overlay.addTo(map) : overlay.remove();
-      if (layer.legend) $(layer.legend === true ? "legend" : layer.legend).hidden = !toggle.checked;
-    };
-    toggle.addEventListener("change", refresh);
-    slider.addEventListener("input", () => overlay.setOpacity(Number(slider.value)));
-    refresh();
+    toggle.checked = state.on;
+    toggle.addEventListener("change", () => { state.on = toggle.checked; repaint(); });
+    slider.addEventListener("input", () => { state.opacity = Number(slider.value); repaint(); });
     $("layers").append(label);
   }
 
-  // Cost maps arrive from ROS 2 through the telemetry server and are drawn on a canvas
-  const costOverlays = {};
-  const costVersions = {};
-  for (const [variant, name] of [["walk", "Cost: walking"], ["rover", "Cost: crew rover"]]) {
-    const overlay = L.imageOverlay("data:,", bounds, { opacity: 0.7 });
-    costOverlays[variant] = overlay;
-    const label = document.createElement("label");
-    label.innerHTML = `<input type="checkbox"><span>${name}</span><input type="range" min="0" max="1" step="0.05" value="0.7">`;
-    const [toggle, slider] = label.querySelectorAll("input");
-    toggle.addEventListener("change", () => {
-      toggle.checked ? overlay.addTo(map) : overlay.remove();
-      $("cost-legend").hidden = !Object.values(costOverlays).some((o) => map.hasLayer(o));
-    });
-    slider.addEventListener("input", () => overlay.setOpacity(Number(slider.value)));
-    $("layers").append(label);
-  }
-
+  // Cost maps arrive from ROS 2 through the telemetry server, one byte per cell
   async function loadCostmap(variant) {
     const response = await fetch(`/costmap/${variant}`);
     if (!response.ok) return;
     const width = Number(response.headers.get("X-Width"));
     const height = Number(response.headers.get("X-Height"));
     const cells = new Int8Array(await response.arrayBuffer());
-    const canvas = Object.assign(document.createElement("canvas"), { width, height });
-    const context = canvas.getContext("2d");
-    const image = context.createImageData(width, height);
+    const image = Object.assign(document.createElement("canvas"), { width, height });
+    const context = image.getContext("2d");
+    const pixels = context.createImageData(width, height);
     for (let row = 0; row < height; row++) {
       const source = row * width, target = (height - 1 - row) * width; // grid row 0 is south
       for (let col = 0; col < width; col++) {
         const cost = cells[source + col];
         const pixel = 4 * (target + col);
         if (cost >= 100) {
-          image.data.set([200, 20, 60, 230], pixel);
+          pixels.data.set([200, 20, 60, 230], pixel);
         } else {
           // Low costs stay clear so the terrain shows through, then yellow to orange
           const t = cost / 99;
-          const alpha = 200 * Math.sqrt(Math.max(0, (t - 0.15) / 0.85));
-          image.data.set([255, 230 - 130 * t, 40, Math.round(alpha)], pixel);
+          pixels.data.set([255, 230 - 130 * t, 40, Math.round(200 * Math.sqrt(Math.max(0, (t - 0.15) / 0.85)))], pixel);
         }
       }
     }
-    context.putImageData(image, 0, 0);
-    costOverlays[variant].setUrl(canvas.toDataURL());
+    context.putImageData(pixels, 0, 0);
+    layerState[`cost_${variant}`].image = image;
+    repaint();
   }
 
-  // The route comes from the planner node; the example file is shown until it does
-  const routeFile = await (await fetch("/data/route_example.geojson")).json();
-  let route = routeFile.features[0].geometry.coordinates;
-  let routeVersion = null;
-  // Dark casing under the dashes keeps the route readable on the orange terrain
-  const routeCasing = L.polyline([], { color: "#14110f", weight: 6, opacity: 0.7 }).addTo(map);
-  const routeDashes = L.polyline([], { color: "#ffffff", weight: 3, dashArray: "6 6" }).addTo(map);
-  const goalMarker = L.circleMarker([0, 0], { radius: 7, color: "#ff8a3d", fillOpacity: 0.3 })
-    .bindTooltip("Science target").addTo(map);
+  // --- Markers, route, trails and the lidar point cloud ---------------------
+  const lift = (x, y, above) => toScene(x, y, groundAt(x, y) + above);
+
+  const astronaut = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.0, 4, 12),
+    new THREE.MeshStandardMaterial({ color: COLORS.astronaut, emissive: COLORS.astronaut, emissiveIntensity: 0.4 }));
+  const astronautBeacon = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 30, 6),
+    new THREE.MeshBasicMaterial({ color: COLORS.astronaut, transparent: true, opacity: 0.5 }));
+  const rover = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.6, 4),
+    new THREE.MeshStandardMaterial({ color: COLORS.rover, emissive: COLORS.rover, emissiveIntensity: 0.3 }));
+  rover.geometry.rotateZ(-Math.PI / 2); // cone points along +x, the heading 0
+  const goalMarker = new THREE.Mesh(new THREE.TorusGeometry(8, 1.2, 8, 32),
+    new THREE.MeshBasicMaterial({ color: COLORS.goal }));
+  goalMarker.rotation.x = Math.PI / 2;
+  const crewRover = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.2, 2),
+    new THREE.MeshStandardMaterial({ color: COLORS.crew }));
+  for (const marker of [astronaut, astronautBeacon, rover, goalMarker, crewRover]) { marker.visible = false; scene.add(marker); }
+
+  const routeLine = new THREE.Line(new THREE.BufferGeometry(),
+    new THREE.LineDashedMaterial({ color: COLORS.route, dashSize: 6, gapSize: 4, depthTest: false }));
+  routeLine.renderOrder = 2;
+  scene.add(routeLine);
+
+  function makeTrail(color) {
+    const line = new THREE.Line(new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.85 }));
+    line.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TRAIL_POINTS * 3), 3));
+    line.geometry.setDrawRange(0, 0);
+    line.renderOrder = 3;
+    line.frustumCulled = false;
+    line.userData = { count: 0, last: null };
+    scene.add(line);
+    return line;
+  }
+  const astronautTrail = makeTrail(COLORS.astronaut);
+  const roverTrail = makeTrail(COLORS.rover);
+  function pushTrail(trail, x, y) {
+    const data = trail.userData;
+    if (data.last && Math.hypot(data.last[0] - x, data.last[1] - y) < 0.5) return;
+    data.last = [x, y];
+    const attribute = trail.geometry.attributes.position;
+    if (data.count === TRAIL_POINTS) { // drop the oldest point
+      attribute.array.copyWithin(0, 3);
+      data.count--;
+    }
+    attribute.array.set(lift(x, y, 0.3).toArray(), 3 * data.count++);
+    attribute.needsUpdate = true;
+    trail.geometry.setDrawRange(0, data.count);
+  }
+  function clearTrail(trail) {
+    trail.userData.count = 0;
+    trail.userData.last = null;
+    trail.geometry.setDrawRange(0, 0);
+  }
+
+  // Lidar points come in the map frame (x, y, z as float32), coloured by height
+  // above the HiRISE terrain: obstacles stand out from the ground
+  const cloud = new THREE.Points(new THREE.BufferGeometry(),
+    new THREE.PointsMaterial({ size: 0.25, vertexColors: true, sizeAttenuation: true }));
+  cloud.frustumCulled = false;
+  scene.add(cloud);
+  $("show-points").addEventListener("change", () => { cloud.visible = $("show-points").checked; });
+  async function loadPoints() {
+    const response = await fetch("/points");
+    if (!response.ok) return;
+    const xyz = new Float32Array(await response.arrayBuffer());
+    const count = xyz.length / 3;
+    const scenePositions = new Float32Array(xyz.length);
+    const colors = new Float32Array(xyz.length);
+    const color = new THREE.Color();
+    for (let i = 0; i < count; i++) {
+      const x = xyz[3 * i], y = xyz[3 * i + 1], z = xyz[3 * i + 2];
+      scenePositions.set([x, z, -y], 3 * i);
+      const above = THREE.MathUtils.clamp((z - groundAt(x, y) + 0.5) / 2.5, 0, 1);
+      color.setHSL(0.5 - 0.5 * above, 1, 0.55); // cyan on the ground to red on top of rocks
+      colors.set([color.r, color.g, color.b], 3 * i);
+    }
+    cloud.geometry.dispose();
+    cloud.geometry = new THREE.BufferGeometry();
+    cloud.geometry.setAttribute("position", new THREE.BufferAttribute(scenePositions, 3));
+    cloud.geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    $("rover-points").textContent = `${count.toLocaleString("en")}`;
+  }
+
+  let route = (await (await fetch("/data/route_example.geojson")).json()).features[0].geometry.coordinates;
   function drawRoute(points) {
     route = points;
-    const line = points.map(([x, y]) => [y, x]);
-    routeCasing.setLatLngs(line);
-    routeDashes.setLatLngs(line);
-    const goal = points[points.length - 1];
-    goalMarker.setLatLng([goal[1], goal[0]]);
+    // Resample every 2 m so the line hugs the ground between route points
+    const line = [];
+    for (let i = 1; i < points.length; i++) {
+      const [x0, y0] = points[i - 1], [x1, y1] = points[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 2));
+      for (let k = 0; k < n; k++) line.push(lift(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, 0.5));
+    }
+    const [gx, gy] = points[points.length - 1];
+    line.push(lift(gx, gy, 0.5));
+    routeLine.geometry.dispose();
+    routeLine.geometry = new THREE.BufferGeometry().setFromPoints(line);
+    routeLine.computeLineDistances();
+    goalMarker.position.copy(lift(gx, gy, 3));
+    goalMarker.visible = true;
   }
   drawRoute(route);
 
+  // --- Camera ---------------------------------------------------------------
+  const centre = toScene(size / 2, size / 2, groundAt(size / 2, size / 2));
+  let followFrom = null;
+  function overview() {
+    controls.target.copy(centre);
+    camera.position.copy(centre).add(new THREE.Vector3(size * 0.35, size * 0.55, size * 0.75));
+    $("follow").checked = false;
+    followFrom = null;
+  }
+  overview();
+  $("follow").checked = true;
+  $("overview").addEventListener("click", overview);
+
+  function resize() {
+    const { clientWidth: w, clientHeight: h } = view;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(view);
+
+  // Following: move the orbit target with the astronaut, keep the camera offset
+  function follow(position) {
+    if (!$("follow").checked) { followFrom = null; return; }
+    if (!followFrom) { // first follow: swing in close behind
+      controls.target.copy(position);
+      camera.position.copy(position).add(new THREE.Vector3(35, 30, 35));
+    } else {
+      const shift = position.clone().sub(followFrom);
+      controls.target.add(shift);
+      camera.position.add(shift);
+    }
+    followFrom = position.clone();
+  }
+
+  // --- Picking: cursor readout and new goals --------------------------------
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  function pick(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObject(terrainMesh)[0];
+    return hit ? { x: hit.point.x, y: -hit.point.z } : null;
+  }
+
+  let hoverEvent = null;
+  renderer.domElement.addEventListener("pointermove", (event) => { hoverEvent = event; });
+  renderer.domElement.addEventListener("pointerleave", () => { hoverEvent = null; $("readout").hidden = true; });
+
   let socket = null;
-  map.on("click", (event) => {
-    if (socket?.readyState !== WebSocket.OPEN) return;
-    const x = event.latlng.lng, y = event.latlng.lat;
-    if (x < 0 || y < 0 || x > size || y > size) return;
-    socket.send(JSON.stringify({ goal: { x, y } }));
-    goalMarker.setLatLng([y, x]);
+  let pressedAt = null;
+  renderer.domElement.addEventListener("pointerdown", (event) => { pressedAt = [event.clientX, event.clientY]; });
+  renderer.domElement.addEventListener("pointerup", (event) => {
+    // A click, not the end of a drag to orbit the camera
+    if (!pressedAt || Math.hypot(event.clientX - pressedAt[0], event.clientY - pressedAt[1]) > 5) return;
+    const point = pick(event);
+    if (!point || socket?.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ goal: point }));
+    goalMarker.position.copy(lift(point.x, point.y, 3));
     $("plan-status").textContent = "Planning…";
   });
 
-  const astronautTrail = L.polyline([], { color: "#5fd4ff", weight: 2, opacity: 0.8 }).addTo(map);
-  const roverTrail = L.polyline([], { color: "#ffd23d", weight: 2, opacity: 0.6 }).addTo(map);
-  const astronautMarker = L.circleMarker([0, 0], { radius: 6, color: "#fff", weight: 2, fillColor: "#5fd4ff", fillOpacity: 1 });
-  const roverMarker = L.marker([0, 0], {
-    icon: L.divIcon({
-      className: "rover-icon", iconSize: [22, 22],
-      html: '<svg viewBox="-11 -11 22 22" width="22" height="22"><path d="M9 0 -7 -7 -3 0 -7 7Z" fill="currentColor" stroke="#000" stroke-width="1"/></svg>',
-    }),
-  });
+  function animate() {
+    requestAnimationFrame(animate);
+    if (hoverEvent) {
+      const point = pick(hoverEvent);
+      hoverEvent = null;
+      const slope = point ? sample(slopeGrid, point.x, point.y) : null;
+      $("readout").hidden = slope === null;
+      if (slope !== null) $("readout").textContent = `x ${fmt(point.x)} m · y ${fmt(point.y)} m · slope ${fmt(slope, 1)}°`;
+    }
+    goalMarker.rotation.z += 0.01;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
 
-  // Grids for the readouts; the map works without them
-  const grids = {};
-  for (const name of ["slope", "sky_view"]) {
-    loadGrid(`/data/layers/${name}.npy`).then((grid) => { grids[name] = grid; });
+  // --- Tabs and camera feeds -------------------------------------------------
+  let activeTab = "view";
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.addEventListener("click", () => {
+      activeTab = tab.dataset.tab;
+      for (const other of document.querySelectorAll(".tab")) {
+        const on = other === tab;
+        other.classList.toggle("active", on);
+        other.setAttribute("aria-selected", String(on));
+        $(other.dataset.tab).hidden = !on;
+      }
+    });
   }
 
-  const readout = L.control({ position: "bottomleft" });
-  readout.onAdd = () => L.DomUtil.create("div", "cursor-readout");
-  readout.addTo(map);
-  map.on("mousemove", (event) => {
-    const x = event.latlng.lng, y = event.latlng.lat;
-    const slope = sample(grids.slope, cell, x, y);
-    readout.getContainer().textContent = slope === null
-      ? "" : `x ${fmt(x)} m · y ${fmt(y)} m · slope ${fmt(slope, 1)}°`;
-  });
-
-  function pushTrail(trail, x, y) {
-    const points = trail.getLatLngs();
-    const last = points[points.length - 1];
-    if (last && Math.hypot(last.lng - x, last.lat - y) < 0.5) return;
-    trail.addLatLng([y, x]);
-    if (points.length > TRAIL_POINTS) trail.setLatLngs(points.slice(-TRAIL_POINTS));
+  const feeds = {};
+  for (const name of ["astronaut", "rover"]) {
+    const image = $(`camera-${name}`);
+    feeds[name] = { version: null, loading: false, received: null };
+    image.addEventListener("load", () => {
+      feeds[name].loading = false;
+      feeds[name].received = performance.now();
+      $(`nosignal-${name}`).hidden = true;
+    });
+    image.addEventListener("error", () => { feeds[name].loading = false; });
   }
+  function updateFeeds(versions) {
+    for (const [name, feed] of Object.entries(feeds)) {
+      const version = versions?.[name];
+      // Fetch only while the tab is open and the previous frame has arrived
+      if (activeTab === "cameras" && version && version !== feed.version && !feed.loading) {
+        feed.version = version;
+        feed.loading = true;
+        $(`camera-${name}`).src = `/camera/${name}?v=${version}`;
+      }
+      const age = feed.received === null ? null : (performance.now() - feed.received) / 1000;
+      $(`age-${name}`).textContent = age === null ? "waiting for ROS 2" : age < 2 ? "live" : `${fmt(age)} s old`;
+    }
+  }
+
+  // --- Telemetry ------------------------------------------------------------
+  const costVersions = {};
+  let routeVersion = null;
+  let pointsVersion = null;
+  let pointsLoading = false;
+  let lastTime = null;
 
   function showPlan(summary) {
     if (!summary) return;
@@ -189,67 +427,96 @@ async function main() {
     $("plan-dose").textContent = `${fmt(summary.dose_uSv, 1)} µSv`;
   }
 
-  let lastTime = null;
-  function show(message) {
-    if (message.route?.version && message.route.version !== routeVersion) {
-      routeVersion = message.route.version;
-      fetch("/route").then((r) => r.json()).then((points) => { if (points.length > 1) drawRoute(points); });
+  function showSuit(suit) {
+    if (suit.dose_rate_uSv_h !== undefined) {
+      const share = suit.dose_rate_uSv_h / meta.dose_model.open_ground_uSv_per_h;
+      $("dose-rate").textContent = `${fmt(suit.dose_rate_uSv_h, 1)} µSv/h (${fmt(share * 100)} %)`;
+      $("dose-total").textContent = `${fmt(suit.dose_uSv, 2)} µSv`;
     }
-    showPlan(message.route?.summary);
+    if (suit.o2_pct === undefined) return;
+    $("suit-o2").textContent = `${fmt(suit.o2_pct, 1)} % · ${fmt(suit.o2_left_min / 60, 1)} h`;
+    $("o2-bar").style.width = `${suit.o2_pct}%`;
+    $("o2-bar").classList.toggle("low", suit.turn_back);
+    $("suit-battery").textContent = `${fmt(suit.battery_pct, 1)} %`;
+    $("suit-return").textContent = `${fmt(suit.return_m)} m · ${fmt(suit.return_min, 1)} min`;
+    $("suit-margin").textContent = `${fmt(suit.margin_min)} min`;
+    $("suit-margin").className = suit.turn_back ? "bad" : "good";
+    $("alert").hidden = !suit.turn_back;
+    $("alert").textContent = "Turn back: oxygen margin for the return is almost used up";
+    const [rx, ry] = suit.return_point;
+    crewRover.position.copy(lift(rx, ry, 1.1));
+    crewRover.visible = true;
+  }
 
+  function show(message) {
     for (const [variant, version] of Object.entries(message.costmaps ?? {})) {
       if (costVersions[variant] !== version) {
         costVersions[variant] = version;
         loadCostmap(variant);
       }
     }
+    if (message.route?.version && message.route.version !== routeVersion) {
+      routeVersion = message.route.version;
+      fetch("/route").then((r) => r.json()).then((points) => { if (points.length > 1) drawRoute(points); });
+    }
+    showPlan(message.route?.summary);
+    if (message.points && message.points !== pointsVersion && !pointsLoading && cloud.visible) {
+      pointsVersion = message.points;
+      pointsLoading = true;
+      loadPoints().finally(() => { pointsLoading = false; });
+    }
 
     // Simulation time going backwards means a new walk: drop the old trails
     if (message.t !== null && lastTime !== null && message.t < lastTime - 1) {
-      astronautTrail.setLatLngs([]);
-      roverTrail.setLatLngs([]);
+      clearTrail(astronautTrail);
+      clearTrail(roverTrail);
     }
     if (message.t !== null) lastTime = message.t;
 
     $("link").className = `pill ${message.live ? "online" : "offline"}`;
     $("link").textContent = message.live ? "Live from ROS 2" : "No telemetry";
-
     if (message.t !== null) {
       const seconds = Math.floor(message.t);
       $("clock").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
     }
 
-    const astronaut = message.astronaut;
-    if (astronaut) {
-      astronautMarker.setLatLng([astronaut.y, astronaut.x]).addTo(map);
-      pushTrail(astronautTrail, astronaut.x, astronaut.y);
-      $("astronaut-position").textContent = `${fmt(astronaut.x)} m E, ${fmt(astronaut.y)} m N`;
-      $("astronaut-elevation").textContent = `${fmt(terrain.elevation_of_z0_m + astronaut.z)} m`;
-      $("astronaut-heading").textContent = `${fmt(((90 - astronaut.heading_deg) % 360 + 360) % 360)}°`;
-      const slope = sample(grids.slope, cell, astronaut.x, astronaut.y);
-      const sky = sample(grids.sky_view, cell, astronaut.x, astronaut.y);
+    const a = message.astronaut;
+    if (a) {
+      astronaut.position.copy(lift(a.x, a.y, 0.9));
+      astronautBeacon.position.copy(lift(a.x, a.y, 15));
+      astronaut.visible = astronautBeacon.visible = true;
+      pushTrail(astronautTrail, a.x, a.y);
+      follow(astronaut.position);
+      $("astronaut-position").textContent = `${fmt(a.x)} m E, ${fmt(a.y)} m N`;
+      $("astronaut-elevation").textContent = `${fmt(terrain.elevation_of_z0_m + a.z)} m`;
+      $("astronaut-heading").textContent = `${fmt(((90 - a.heading_deg) % 360 + 360) % 360)}°`;
+      const slope = sample(slopeGrid, a.x, a.y);
       $("astronaut-slope").textContent = slope === null ? "–" : `${fmt(slope, 1)}°`;
-      $("astronaut-sky").textContent = sky === null ? "–" : `${fmt(sky * 100)} %`;
-      const { walked, total } = routeProgress(route, astronaut.x, astronaut.y);
+      const { walked, total } = routeProgress(route, a.x, a.y);
       $("progress").style.width = `${(100 * walked) / total}%`;
       $("progress-text").textContent = `${fmt(walked)} of ${fmt(total)} m`;
     }
+    if (message.suit) showSuit(message.suit);
+    updateFeeds(message.cameras);
 
-    const suit = message.suit;
-    if (suit) {
-      const share = suit.dose_rate_uSv_h / meta.dose_model.open_ground_uSv_per_h;
-      $("dose-rate").textContent = `${fmt(suit.dose_rate_uSv_h, 1)} µSv/h (${fmt(share * 100)} %)`;
-      $("dose-total").textContent = `${fmt(suit.dose_uSv, 2)} µSv`;
+    // Helmet-camera overlay: what the astronaut would see on the HUD
+    if (a && route.length) {
+      const [gx, gy] = route[route.length - 1];
+      $("hud-target").textContent = `Target ${fmt(Math.hypot(gx - a.x, gy - a.y))} m`;
     }
+    if (message.suit?.margin_min !== undefined) {
+      $("hud-margin").textContent = `O₂ margin ${fmt(message.suit.margin_min)} min`;
+      $("hud-margin").className = message.suit.turn_back ? "bad" : "";
+    }
+    if (message.rover_distance_m !== undefined) $("hud-rover").textContent = `Rover ${fmt(message.rover_distance_m, 1)} m`;
 
-    const rover = message.rover;
-    if (rover) {
-      roverMarker.setLatLng([rover.y, rover.x]).addTo(map);
-      const arrow = roverMarker.getElement()?.querySelector("svg");
-      if (arrow) arrow.style.transform = `rotate(${-rover.heading_deg}deg)`;
-      pushTrail(roverTrail, rover.x, rover.y);
-      $("rover-state").textContent = rover.state ?? "–";
-      $("rover-position").textContent = `${fmt(rover.x)} m E, ${fmt(rover.y)} m N`;
+    const r = message.rover;
+    if (r) {
+      rover.position.copy(lift(r.x, r.y, 0.4));
+      rover.rotation.y = (r.heading_deg * Math.PI) / 180;
+      rover.visible = true;
+      pushTrail(roverTrail, r.x, r.y);
+      $("rover-state").textContent = r.state ?? "–";
       $("rover-distance").textContent = `${fmt(message.rover_distance_m, 1)} m`;
     }
   }
