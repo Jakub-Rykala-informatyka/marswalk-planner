@@ -53,15 +53,16 @@ Uruchomienie:
 ./scripts/run_sim.sh         # Isaac Sim z publikacją do ROS 2
 ```
 
-### Co dalej, w kolejności
+### Co dalej, w kolejności (stan: sobota 21:13)
 
-1. ~~Trzeci rodzaj danych~~: zrobione. Mamy wysokości i zdjęcia z HiRISE oraz promieniowanie z RAD.
-2. ~~Mapa kosztów na tematach ROS~~: zrobione. Węzeł `costmap` subskrybuje `/nasa/*` i publikuje `/costmap/walk` i `/costmap/rover`; wagi i limity zmienia się parametrami ROS na żywo.
-3. ~~Planer na tematach ROS~~: zrobione. Węzeł `planner` publikuje `/route` i `/route/summary`; cel ustawia się kliknięciem w mapę na dashboardzie.
-4. ~~Budżet wyjścia~~: zrobione. Węzeł `suit_monitor` publikuje `/suit/status`. Rafał może brać te same pola do HUD-u w okularach.
-5. **HUD.** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard.
-6. **Łazik osobowy i ramię** w symulacji.
-7. **Scenariusz burzy słonecznej.**
+1. ~~Trzeci rodzaj danych~~, ~~mapa kosztów na tematach ROS~~, ~~planer na tematach ROS~~, ~~budżet wyjścia~~: zrobione.
+2. **HUD w okularach (Rafał).** Osobna strona na czarnym tle, zasilana tym samym WebSocketem co dashboard. Źródła danych są gotowe: `/suit/status`, `/route`, `/mission/progress`, pozycje astronauty i łazika.
+3. **Modele CAD od Gosi** (lista w `docs/cad_dla_gosi.md`): łazik osobowy, końcówka ramienia, skrzynie z narzędziami. Po oddaniu Kuba wstawia je do sceny i do dashboardu.
+4. **Scenariusz burzy słonecznej (Rafał).** Alert w HUD-zie i droga do najbliższego schronienia.
+5. **Pełna misja w symulacji.** Krótka misja testowa przeszła całą trasę bez przewrócenia. Pełny „Boxwork EVA 1” (ok. 4 km) do sprawdzenia do filmu, odcinkami.
+6. **Nagrania do filmu i slajdów.** Dominika i Wanessa dostają zrzuty z zakładek Mission, 3D, Cameras i Rover planner. Film 30 s wymaga nagrania przelotu bez lidaru (`--no-lidar`).
+
+Zrobione w tej rundzie (poza listą wyżej): ramię Unitree Z1 na łaziku ze zdalnym sterowaniem, misja z przystankami i ramieniem przy próbce, wybór misji i dziennik na dashboardzie, lista CAD dla Gosi, notatki do prezentacji.
 
 ---
 
