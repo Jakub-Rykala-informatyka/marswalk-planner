@@ -1,6 +1,8 @@
 # Marswalk Planner: plan działania zespołu
 
-Stan na sobotę 14.11.2026, godz. 15:05. Godziny niedzielne są ustawione pod oddanie około 13:00. **Wpiszcie tu prawdziwy termin oddania i przesuńcie niedzielę pod niego.**
+Stan na sobotę 14.11.2026, godz. 15:05.
+
+**Termin globalny: niedziela 15.11, godz. 23:59 czasu lokalnego** (przycisk „Submit for Judging”). Ocena lokalna w Stalowej Woli może być wcześniej. Godziny niedzielne w tym planie zakładają pokaz lokalny około 13:00. **Zapytajcie organizatora lokalnego o godzinę i przesuńcie niedzielę pod nią.**
 
 ---
 
@@ -123,14 +125,16 @@ To jest najważniejsza godzina. Dzięki tym ustaleniom każdy pracuje dalej bez 
 1. Ustalić jedną historię: astronautka wychodzi po próbki formacji skrzynkowych, w połowie przychodzi alert burzy słonecznej.
 2. Slajdy i film według układów poniżej.
 3. Tekst opisu projektu na podstawie `raport_marswalk_planner.md`.
-4. Lista użytych danych i narzędzi NASA oraz informacja o użyciu AI, jeśli zasady tego wymagają.
+4. Lista użytych danych i narzędzi NASA, lista pozostałych źródeł oraz opis użycia AI (zasady w rozdziale „Zasady zgłoszenia”).
 5. Zbierać materiał na bieżąco: zrzuty ekranu po każdym punkcie kontrolnym, nagranie osoby w okularach.
 
 ---
 
 ## Układ 7 slajdów
 
-1. **Tytuł:** nazwa, jedno zdanie, zespół.
+Slajdy muszą być po angielsku. Limit to 7 slajdów razem z tytułowym.
+
+1. **Tytuł:** nazwa projektu, jedno zdanie, nazwa zespołu, imiona członków, nazwa wybranego zadania (wszystko to jest wymagane).
 2. **Problem:** dane o Marsie są w skali planety, a spacer ma kilka kilometrów.
 3. **Rozwiązanie:** jedna mapa z warstwami i trasa dla człowieka w skafandrze.
 4. **Dane NASA:** tabela warstw i misji, z których pochodzą.
@@ -140,13 +144,15 @@ To jest najważniejsza godzina. Dzięki tym ustaleniom każdy pracuje dalej bez 
 
 ## Układ filmu 30 sekund
 
-| Sekundy | Obraz | Lektor |
-| --- | --- | --- |
-| 0–5 | Mars z orbity, zbliżenie na Mount Sharp | problem w jednym zdaniu |
-| 5–13 | ekran habitatu: warstwy włączane po kolei, pojawia się trasa | co robi mapa |
-| 13–20 | osoba w okularach, widok HUD-u, alert burzy i strzałka do schronienia | bezpieczeństwo |
-| 20–27 | przelot w Isaac Sim, łazik sięga ramieniem po próbkę | łazik wsparcia |
-| 27–30 | nazwa projektu i zespół | jedno zdanie na koniec |
+Układ idzie za wzorem z przewodnika Space Apps. Film może być po polsku, ale **musi mieć angielskie napisy**. Limit to 30 sekund i ani sekundy więcej.
+
+| Sekundy | Co mówi przewodnik | Obraz | Lektor |
+| --- | --- | --- | --- |
+| 0–2 | przedstaw się | zespół albo plansza z nazwą zespołu | kto mówi i nazwa zespołu |
+| 2–5 | zadanie i inspiracja | Mars z orbity, zbliżenie na Mount Sharp | które zadanie i dlaczego |
+| 5–10 | nazwa projektu i hasło | plansza „Marswalk Planner” | nazwa i jedno zdanie |
+| 10–20 | jak to działa, dane NASA | ekran habitatu z warstwami i trasą, potem HUD w okularach z alertem burzy | co robi mapa i z jakich danych NASA |
+| 20–30 | spojrzenie w przyszłość | przelot w Isaac Sim, łazik sięga ramieniem po próbkę | co to daje załodze na Marsie i na Księżycu |
 
 ---
 
@@ -163,9 +169,47 @@ To jest najważniejsza godzina. Dzięki tym ustaleniom każdy pracuje dalej bez 
 
 ---
 
-## Do sprawdzenia u organizatorów
+## Zasady zgłoszenia
 
-- dokładny termin i forma oddania,
-- czy film i slajdy są wymagane oba, czy do wyboru,
-- czy trzeba opisać użycie narzędzi AI,
-- czy repozytorium ma być publiczne.
+Źródło: przewodnik „Project Submission Guide” na stronie Space Apps (wersja z 13.11.2026).
+
+**Termin i forma**
+- Zgłoszenie zamyka się w niedzielę 15.11 o 23:59 czasu lokalnego. Liczy się kliknięcie „Submit for Judging”.
+- Można zapisywać i zgłaszać wiele razy. Sędziowie widzą ostatnią zapisaną wersję.
+- **Wszystko w formularzu i w podlinkowanych materiałach musi być po angielsku.** Wyjątek: film może być w innym języku, jeśli ma angielskie napisy.
+
+**Demo**
+- W formularzu jest jedno pole na demo: **film do 30 sekund albo prezentacja do 7 slajdów**. Wystarczy jedno z dwóch.
+- Przekroczenie limitu wyklucza projekt z oceny globalnej.
+- Film i slajdy trzeba wgrać na zewnętrzny serwis (YouTube, Dysk Google, GitHub) i podać link publiczny.
+
+**Linki**
+- Każdy link musi działać **bez logowania, hasła i próśb o dostęp**. Przed zgłoszeniem sprawdzić w oknie prywatnym przeglądarki.
+- Z tego wynika, że **repozytorium na GitHubie musi być publiczne najpóźniej w chwili zgłoszenia**.
+- Na samą stronę projektu można wgrać tylko obrazy (JPG, PNG, GIF do 10 MB).
+
+**Pola formularza do wypełnienia**
+- nazwa projektu,
+- krótkie podsumowanie,
+- link do demo,
+- link do gotowego projektu,
+- szczegółowy opis (co robi, jak działa, korzyści, narzędzia i języki),
+- użycie AI,
+- dane NASA (co najmniej jedno źródło NASA, żeby walczyć o nagrodę globalną),
+- dane agencji partnerskich i pozostałe źródła (kod, teksty, obrazy, także otwarte).
+
+**Użycie AI**
+- AI jest dozwolone jako narzędzie. Według zasad **nie powinno wymyślać pomysłu na rozwiązanie**.
+- Trzeba wskazać, gdzie i jak było użyte.
+- Obrazy i filmy z AI muszą mieć widoczny znak wodny.
+- Dźwięk, kod i dane z AI trzeba oznaczyć w opisie i w metadanych.
+- Materiały z AI nie mogą zawierać logo NASA, flag ani znaków misji.
+
+**Inne**
+- W filmie i materiałach nie może być osób poniżej 18 lat.
+- Wszyscy członkowie zespołu muszą być potwierdzonymi uczestnikami tego samego wydarzenia lokalnego.
+- Kryteria oceny: wpływ, kreatywność, poprawność, związek z zadaniem, prezentacja.
+
+## Do sprawdzenia u organizatora lokalnego
+
+- godzina i forma oceny lokalnej w Stalowej Woli (pokaz na żywo czy tylko zgłoszenie).

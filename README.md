@@ -23,6 +23,10 @@ A layered map and route planner for a crewed walk on Mars, built for the boxwork
 - Route: `data/route.geojson`.
 - Live telemetry: one JSON message over WebSocket, format in `docs/plan_dzialania.md`.
 
+## Use of AI tools
+
+Parts of the code, documentation and repository setup in this project were written with the help of an AI assistant (Claude, Anthropic). AI-assisted commits carry a `Co-Authored-By: Claude` trailer in their metadata.
+
 ## NASA data and resources
 
 See `docs/nasa_data.md` and the data table in `docs/raport_marswalk_planner.md`.
