@@ -5,6 +5,8 @@ python.sh without starting the simulator.
 
   overview  -> data/preview/*.png, to pick the patch by eye
   crop      -> data/terrain/{heights.npy, texture.jpg, meta.json}
+  hires     -> data/terrain/texture_hires.jpg for the same patch, from the
+               25 cm orthoimage (large, kept out of the repository)
 
 Pixel coordinates are (line, sample) of the full DTM, line 0 at the north edge.
 Local coordinates of the patch: metres, origin in the south-west corner,
@@ -25,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 DTM = RAW / "DTEEC_001488_1750_001752_1750_U02.IMG"
 ORTHO = RAW / "PSP_001752_1750_RED_C_01_ORTHO.JP2"
+ORTHO_HIRES = RAW / "PSP_001752_1750_RED_A_01_ORTHO.JP2"
 
 # Elevations below this are the PDS missing-data constant, not terrain
 NODATA_BELOW = -1e30
@@ -32,14 +35,19 @@ NODATA_BELOW = -1e30
 MARS_TINT = np.array([1.00, 0.66, 0.42])
 
 
-def read_label(path):
-    """Return the PDS3 label keywords we need from the head of an .IMG file."""
+def label_keys(path):
+    """Return a reader of PDS3 label keywords from the head of a label or .IMG file."""
     head = path.read_bytes()[:20000].decode("latin-1")
 
     def key(name, cast=float):
         m = re.search(rf"^\s*{name}\s*=\s*([^\s<]+)", head, re.M)
         return cast(m.group(1))
 
+    return key
+
+
+def read_label(path):
+    key = label_keys(path)
     return {
         "record_bytes": key("RECORD_BYTES", int),
         "image_record": key(r"\^IMAGE", int),
@@ -97,6 +105,30 @@ def overview(step):
     print(f"preview step {step} px -> {z.shape}, saved in {out}")
 
 
+def tint(gray_image):
+    """Stretch the contrast of a grayscale image and give it the Mars tint."""
+    gray = np.asarray(gray_image, dtype=np.float32)
+    lo, hi = np.percentile(gray[::4, ::4], [0.5, 99.5])
+    gray = np.clip((gray - lo) / (hi - lo), 0, 1)
+    return Image.fromarray((gray[..., None] * MARS_TINT * 255).astype(np.uint8))
+
+
+def hires():
+    """Cut the patch recorded in meta.json out of the 25 cm orthoimage."""
+    out = ROOT / "data" / "terrain"
+    patch = json.loads((out / "meta.json").read_text())["crop_px"]
+    _, dtm = open_dtm()
+    key = label_keys(ORTHO_HIRES.with_suffix(".LBL"))
+    ratio = dtm["map_scale"] / key("MAP_SCALE")
+    # Same map projection, so pixel grids differ only by scale and offset
+    top = round(key("LINE_PROJECTION_OFFSET") - (dtm["line_offset"] - patch["line"]) * ratio)
+    left = round(key("SAMPLE_PROJECTION_OFFSET") + (patch["sample"] - dtm["sample_offset"]) * ratio)
+    side = round(patch["size"] * ratio)
+    ortho = Image.open(ORTHO_HIRES).crop((left, top, left + side, top + side)).convert("L")
+    tint(ortho).save(out / "texture_hires.jpg", quality=90)
+    print(f"texture_hires.jpg: {side} x {side} px, {key('MAP_SCALE'):.3f} m/px")
+
+
 def crop(line, sample, size, step):
     """Cut size x size pixels with the north-west corner at (line, sample)."""
     dtm, label = open_dtm()
@@ -112,11 +144,7 @@ def crop(line, sample, size, step):
     np.save(out / "heights.npy", heights)
 
     ortho = Image.open(ORTHO).crop((sample, line, sample + size, line + size)).convert("L")
-    gray = np.asarray(ortho, dtype=np.float32)
-    lo, hi = np.percentile(gray, [0.5, 99.5])
-    gray = np.clip((gray - lo) / (hi - lo), 0, 1)
-    rgb = (gray[..., None] * MARS_TINT * 255).astype(np.uint8)
-    Image.fromarray(rgb).save(out / "texture.jpg", quality=92)
+    tint(ortho).save(out / "texture.jpg", quality=92)
 
     # Projected metres -> degrees, equirectangular with latitude of true scale 0
     lat_north = (label["line_offset"] - line) / label["map_resolution"]
@@ -151,8 +179,11 @@ if __name__ == "__main__":
     p.add_argument("--sample", type=int, required=True, help="west edge of the patch, px")
     p.add_argument("--size", type=int, default=2048, help="patch side, px (about 1 m each)")
     p.add_argument("--step", type=int, default=2, help="keep every n-th height sample")
+    sub.add_parser("hires")
     args = parser.parse_args()
     if args.cmd == "overview":
         overview(args.step)
+    elif args.cmd == "hires":
+        hires()
     else:
         crop(args.line, args.sample, args.size, args.step)

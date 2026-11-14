@@ -36,3 +36,5 @@ log/
 # generated locally, rebuild with sim/prepare_terrain.py and sim/build_scene.py
 data/preview/
 data/terrain/*.usd
+media/frames/
+data/terrain/texture_hires.jpg

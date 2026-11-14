@@ -15,15 +15,15 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--no-render", action="store_true", help="only write the USD file")
-parser.add_argument("--gui", action="store_true", help="open the Isaac Sim window and keep it open")
+parser.add_argument("--headless", action="store_true", help="run without the Isaac Sim window")
 args = parser.parse_args()
 
 from isaacsim import SimulationApp
 
-simulation_app = SimulationApp({"headless": not args.gui, "width": 1280, "height": 720})
+simulation_app = SimulationApp({"headless": args.headless, "width": 1280, "height": 720})
 
 import omni.usd
-from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdShade, Vt
+from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, UsdShade, Vt
 
 ROOT = Path(__file__).resolve().parents[1]
 TERRAIN = ROOT / "data" / "terrain"
@@ -76,7 +76,9 @@ def add_terrain(stage, heights, cell):
     reader.CreateInput("varname", Sdf.ValueTypeNames.Token).Set("st")
     texture = UsdShade.Shader.Define(stage, "/World/Looks/MarsGround/Ortho")
     texture.CreateIdAttr("UsdUVTexture")
-    texture.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(Sdf.AssetPath("./texture.jpg"))
+    # Prefer the 25 cm texture when prepare_terrain.py hires has made it
+    image = "texture_hires.jpg" if (TERRAIN / "texture_hires.jpg").exists() else "texture.jpg"
+    texture.CreateInput("file", Sdf.ValueTypeNames.Asset).Set(Sdf.AssetPath(f"./{image}"))
     texture.CreateInput("sourceColorSpace", Sdf.ValueTypeNames.Token).Set("sRGB")
     texture.CreateInput("st", Sdf.ValueTypeNames.Float2).ConnectToSource(
         reader.ConnectableAPI(), "result")
@@ -84,6 +86,17 @@ def add_terrain(stage, heights, cell):
         texture.ConnectableAPI(), "rgb")
     material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
     UsdShade.MaterialBindingAPI.Apply(mesh.GetPrim()).Bind(material)
+
+    # Static triangle-mesh collider with the friction of dry, firm ground
+    UsdPhysics.CollisionAPI.Apply(mesh.GetPrim())
+    UsdPhysics.MeshCollisionAPI.Apply(mesh.GetPrim()).CreateApproximationAttr("none")
+    ground = UsdShade.Material.Define(stage, "/World/Looks/GroundPhysics")
+    friction = UsdPhysics.MaterialAPI.Apply(ground.GetPrim())
+    friction.CreateStaticFrictionAttr(0.9)
+    friction.CreateDynamicFrictionAttr(0.8)
+    friction.CreateRestitutionAttr(0.0)
+    UsdShade.MaterialBindingAPI(mesh.GetPrim()).Bind(
+        ground, UsdShade.Tokens.weakerThanDescendants, "physics")
 
 
 def add_lights(stage):
@@ -163,7 +176,8 @@ for _ in range(10):
 if not args.no_render:
     render(cameras)
 
-while args.gui and simulation_app.is_running():
+# With the window open, keep the scene up until the user closes it
+while not args.headless and simulation_app.is_running():
     simulation_app.update()
 
 simulation_app.close()
