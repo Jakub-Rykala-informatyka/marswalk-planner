@@ -19,14 +19,19 @@ function save(plan) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(plan)); } catch { /* storage blocked: plan lives for this visit */ }
 }
 
-// Gosia's CAD models (app/cad/<id>.glb) are in centimetres; glTF is in metres
-const CAD_SCALE = 0.01;
 const cadScenes = {}; // id -> loaded scene, for the ids that have a model
+const cadScale = {}; // id -> factor to metres: some exports store centimetres, some already metres
 
 async function loadCad(ids) {
   const loader = new GLTFLoader();
   await Promise.all([...new Set(ids)].map((id) => new Promise((resolve) => {
-    loader.load(`/app/cad/${id}.glb`, (gltf) => { cadScenes[id] = gltf.scene; resolve(); }, undefined, () => resolve());
+    loader.load(`/app/cad/${id}.glb`, (gltf) => {
+      const size = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+      const largest = Math.max(size.x, size.y, size.z);
+      cadScenes[id] = gltf.scene;
+      cadScale[id] = largest > 20 ? 0.01 : 1; // a 20 m part can only be centimetres
+      resolve();
+    }, undefined, () => resolve());
   })));
 }
 
@@ -242,7 +247,7 @@ export async function initPlanner({ send }) {
     if (bodyModel) {
       // CAD body: standing on the ground at the origin, centred over the wheels
       const body = bodyModel.clone(true);
-      body.scale.setScalar(CAD_SCALE);
+      body.scale.setScalar(cadScale[plan.rover]);
       const bounds = new THREE.Box3().setFromObject(body);
       const centre = bounds.getCenter(new THREE.Vector3());
       body.position.set(-centre.x, -bounds.min.y, -centre.z);
@@ -297,7 +302,7 @@ export async function initPlanner({ send }) {
       for (let k = 0; k < count; k++) {
         const cad = cadScenes[id];
         const shape = cad ? cad.clone(true) : equipmentShape(id);
-        if (cad) shape.scale.setScalar(CAD_SCALE); else shape.scale.setScalar(scale);
+        if (cad) shape.scale.setScalar(cadScale[id]); else shape.scale.setScalar(scale);
         // A CAD part stands with its bottom on the mount point; stand-ins keep their origin there
         const seat = (x, y, z) => {
           if (!cad) { shape.position.set(x, y, z); return; }

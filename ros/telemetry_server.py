@@ -321,6 +321,12 @@ def main():
     app["clients"] = set()
     app["rate"] = args.rate
     app.on_startup.append(start_broadcast)
+
+    async def no_cache(request, response):
+        # Dashboard files change while the team works: always revalidate them
+        if request.path.startswith(("/app/", "/data/", "/camera/", "/costmap/")) or request.path == "/":
+            response.headers["Cache-Control"] = "no-cache"
+    app.on_response_prepare.append(no_cache)
     app.router.add_get("/", index)
     app.router.add_get("/ws", websocket)
     app.router.add_get("/costmap/{variant}", costmap)
