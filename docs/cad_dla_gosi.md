@@ -113,3 +113,15 @@ Te modele uzupełniają planer łazika. Jeśli zabraknie czasu, zostają proste 
 - Wymiary w tabelach to **wartości koncepcyjne** z naszego katalogu, a nie dane NASA. Jeśli projekt wymaga innych proporcji, zmień je i daj znać Kubie, to poprawi katalog.
 - Zrzuty modeli z Inventora albo CATII przydadzą się na slajd 6 („Safety and robots”) i do filmu.
 - Pytania o mocowania i osie: Kuba.
+
+---
+
+## Aktualizacja: modele Gosi w podglądzie
+
+Modele GLB z archiwum Gosi są w `app/cad/`. Podgląd w zakładce „Rover planner” ładuje je zamiast prostych brył:
+- **Kadłub łazika osobowego i otwartego:** pełny model zastępuje podwozie, koła i kabinę. Koła i podwozie z osobnych plików (`*_chassis`, `*_wheel`) są w archiwum, ale do podglądu nie są potrzebne.
+- **Osprzęt:** każdy element stoi podstawą na swoim miejscu montażu.
+- **Jednostki:** modele są w centymetrach, dashboard przelicza je na metry (× 0,01).
+
+Pliki `.ipt` (Inventor) i `OldVersions` nie idą do repozytorium. Katalog Gosi `cad/rover_catalog.json` ma inny format niż `app/rover_catalog.json` i nie jest jeszcze używany: do decyzji, który katalog zostaje.
+

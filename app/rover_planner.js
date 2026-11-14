@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const STORE_KEY = "marswalk.roverPlan";
 const SLOT_NAMES = { arm: "Arm mounts", bay: "Cargo bays", mast: "Mast", deck: "Deck" };
@@ -18,8 +19,20 @@ function save(plan) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(plan)); } catch { /* storage blocked: plan lives for this visit */ }
 }
 
+// Gosia's CAD models (app/cad/<id>.glb) are in centimetres; glTF is in metres
+const CAD_SCALE = 0.01;
+const cadScenes = {}; // id -> loaded scene, for the ids that have a model
+
+async function loadCad(ids) {
+  const loader = new GLTFLoader();
+  await Promise.all([...new Set(ids)].map((id) => new Promise((resolve) => {
+    loader.load(`/app/cad/${id}.glb`, (gltf) => { cadScenes[id] = gltf.scene; resolve(); }, undefined, () => resolve());
+  })));
+}
+
 export async function initPlanner({ send }) {
   const catalog = await (await fetch("/app/rover_catalog.json")).json();
+  await loadCad([...catalog.rovers.map((r) => r.id), ...catalog.equipment.map((e) => e.id)]);
   const rovers = Object.fromEntries(catalog.rovers.map((r) => [r.id, r]));
   const items = Object.fromEntries(catalog.equipment.map((e) => [e.id, e]));
   $("planner-note").textContent = catalog.note;
@@ -224,12 +237,24 @@ export async function initPlanner({ send }) {
     model = new THREE.Group();
 
     const deckY = R * 1.3 + H / 2;
-    const chassis = box(L, H, W, color);
-    chassis.position.y = deckY;
-    model.add(chassis);
-    const top = deckY + H / 2;
+    let top = deckY + H / 2;
+    const bodyModel = cadScenes[plan.rover];
+    if (bodyModel) {
+      // CAD body: standing on the ground at the origin, centred over the wheels
+      const body = bodyModel.clone(true);
+      body.scale.setScalar(CAD_SCALE);
+      const bounds = new THREE.Box3().setFromObject(body);
+      const centre = bounds.getCenter(new THREE.Vector3());
+      body.position.set(-centre.x, -bounds.min.y, -centre.z);
+      model.add(body);
+      top = bounds.max.y - bounds.min.y;
+    } else {
+      const chassis = box(L, H, W, color);
+      chassis.position.y = deckY;
+      model.add(chassis);
+    }
 
-    const perSide = wheels / 2;
+    const perSide = bodyModel ? 0 : wheels / 2;
     for (let i = 0; i < perSide; i++) {
       const x = perSide === 1 ? 0 : -L * 0.38 + (i * L * 0.76) / (perSide - 1);
       for (const side of [-1, 1]) {
@@ -243,7 +268,7 @@ export async function initPlanner({ send }) {
       }
     }
 
-    if (cabin) {
+    if (cabin && !bodyModel) {
       const shell = new THREE.Mesh(new THREE.CapsuleGeometry(W * 0.42, L * 0.32, 8, 24), material(0xf4f1ea));
       shell.rotation.z = Math.PI / 2;
       shell.position.set(L * 0.12, top + W * 0.38, 0);
@@ -270,8 +295,15 @@ export async function initPlanner({ send }) {
     for (const [id, count] of Object.entries(plan.equipment)) {
       const item = items[id];
       for (let k = 0; k < count; k++) {
-        const shape = equipmentShape(id);
-        shape.scale.setScalar(scale);
+        const cad = cadScenes[id];
+        const shape = cad ? cad.clone(true) : equipmentShape(id);
+        if (cad) shape.scale.setScalar(CAD_SCALE); else shape.scale.setScalar(scale);
+        // A CAD part stands with its bottom on the mount point; stand-ins keep their origin there
+        const seat = (x, y, z) => {
+          if (!cad) { shape.position.set(x, y, z); return; }
+          const low = new THREE.Box3().setFromObject(shape).min.y;
+          shape.position.set(x, y - low, z);
+        };
         if (item.slot === "mast") {
           if (!mastHeight) { // the pole itself, once
             const pole = cylinder(0.04 * scale, 1.0 * scale, 0xdddddd);
@@ -279,13 +311,13 @@ export async function initPlanner({ send }) {
             model.add(pole);
           }
           mastHeight += 1;
-          shape.position.set(slotSpots.mast[0][0], top + (0.75 + 0.18 * mastHeight) * scale, slotSpots.mast[0][2]);
+          seat(slotSpots.mast[0][0], top + (0.75 + 0.18 * mastHeight) * scale, slotSpots.mast[0][2]);
         } else {
           const spots = slotSpots[item.slot];
           const spot = spots[used[item.slot] % spots.length];
           // Extra items of a full slot type stack upwards
           const layer = Math.floor(used[item.slot] / spots.length);
-          shape.position.set(spot[0], spot[1] + layer * 0.22 * scale, spot[2]);
+          seat(spot[0], spot[1] + layer * 0.22 * scale, spot[2]);
           used[item.slot] += 1;
         }
         model.add(shape);
