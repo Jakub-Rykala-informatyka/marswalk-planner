@@ -9,13 +9,16 @@ limits are ROS parameters; changing one recomputes the maps, for example:
 """
 
 import array
+import json
 
 import numpy as np
 import rclpy
 from nav_msgs.msg import OccupancyGrid
 from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import String
 
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=ReliabilityPolicy.RELIABLE)
@@ -65,6 +68,8 @@ class Costmap(Node):
         for name in LAYERS:
             self.create_subscription(OccupancyGrid, f"/nasa/{name}",
                                      lambda msg, name=name: self.on_layer(name, msg), LATCHED)
+        # The rover planner tab sets the crew rover's limits
+        self.create_subscription(String, "/rover/config", self.on_rover_config, LATCHED)
         self.add_on_set_parameters_callback(self.on_parameters)
         self.pending = False
         self.create_timer(0.2, self.publish_if_pending)
@@ -73,6 +78,13 @@ class Costmap(Node):
         self.layers[name] = grid_values(msg)
         self.info = msg.info
         self.pending = True
+
+    def on_rover_config(self, msg):
+        config = json.loads(msg.data)
+        limit = float(config["max_slope_deg"])
+        self.set_parameters([Parameter("rover.max_slope_deg", value=limit),
+                             Parameter("rover.comfort_slope_deg", value=round(limit * 0.55, 1))])
+        self.get_logger().info(f"rover from the planner: {config.get('rover_name')}, slope limit {limit:g} deg")
 
     def on_parameters(self, _params):
         self.pending = True  # recompute after the new values are stored

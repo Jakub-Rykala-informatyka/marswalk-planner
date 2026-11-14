@@ -199,9 +199,17 @@ async function main() {
   const rover = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.6, 4),
     new THREE.MeshStandardMaterial({ color: COLORS.rover, emissive: COLORS.rover, emissiveIntensity: 0.3 }));
   rover.geometry.rotateZ(-Math.PI / 2); // cone points along +x, the heading 0
-  const goalMarker = new THREE.Mesh(new THREE.TorusGeometry(8, 1.2, 8, 32),
-    new THREE.MeshBasicMaterial({ color: COLORS.goal }));
-  goalMarker.rotation.x = Math.PI / 2;
+  // Goal: an arrow pointing down at the target, its tip on the ground
+  const goalMarker = new THREE.Group();
+  const goalArrow = new THREE.Group();
+  const arrowMaterial = new THREE.MeshStandardMaterial({ color: COLORS.goal, emissive: COLORS.goal, emissiveIntensity: 0.5 });
+  const arrowHead = new THREE.Mesh(new THREE.ConeGeometry(3, 6, 24), arrowMaterial);
+  arrowHead.rotation.x = Math.PI; // tip down
+  arrowHead.position.y = 3;
+  const arrowShaft = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10, 16), arrowMaterial);
+  arrowShaft.position.y = 11;
+  goalArrow.add(arrowHead, arrowShaft);
+  goalMarker.add(goalArrow);
   const crewRover = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.2, 2),
     new THREE.MeshStandardMaterial({ color: COLORS.crew }));
   for (const marker of [astronaut, astronautBeacon, rover, goalMarker, crewRover]) { marker.visible = false; scene.add(marker); }
@@ -287,7 +295,7 @@ async function main() {
     routeLine.geometry.dispose();
     routeLine.geometry = new THREE.BufferGeometry().setFromPoints(line);
     routeLine.computeLineDistances();
-    goalMarker.position.copy(lift(gx, gy, 3));
+    goalMarker.position.copy(lift(gx, gy, 0));
     goalMarker.visible = true;
   }
   drawRoute(route);
@@ -351,7 +359,7 @@ async function main() {
     const point = pick(event);
     if (!point || socket?.readyState !== WebSocket.OPEN) return;
     socket.send(JSON.stringify({ goal: point }));
-    goalMarker.position.copy(lift(point.x, point.y, 3));
+    goalMarker.position.copy(lift(point.x, point.y, 0));
     $("plan-status").textContent = "Planning…";
   });
 
@@ -364,7 +372,9 @@ async function main() {
       $("readout").hidden = slope === null;
       if (slope !== null) $("readout").textContent = `x ${fmt(point.x)} m · y ${fmt(point.y)} m · slope ${fmt(slope, 1)}°`;
     }
-    goalMarker.rotation.z += 0.01;
+    goalArrow.position.y = 1.5 + 1.5 * Math.sin(performance.now() / 300); // bob above the target
+    // Keep the arrow readable from far away: grow it with the camera distance
+    goalMarker.scale.setScalar(Math.max(0.6, camera.position.distanceTo(goalMarker.position) / 250));
     controls.update();
     renderer.render(scene, camera);
   }
@@ -453,6 +463,12 @@ async function main() {
     $("suit-return").textContent = `${fmt(suit.return_m)} m · ${fmt(suit.return_min, 1)} min`;
     $("suit-margin").textContent = `${fmt(suit.margin_min)} min`;
     $("suit-margin").className = suit.turn_back ? "bad" : "good";
+    if (suit.support_rover) {
+      $("suit-rover").textContent = suit.support_rover;
+      $("suit-spare").textContent = suit.spare_o2_h
+        ? `+${fmt(suit.spare_o2_h)} h ${suit.spare_in_field ? "in the field (counts in margin)" : "at the rover"}`
+        : "none";
+    }
     $("alert").hidden = !suit.turn_back;
     $("alert").textContent = "Turn back: oxygen margin for the return is almost used up";
     const [rx, ry] = suit.return_point;

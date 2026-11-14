@@ -39,8 +39,20 @@ class SuitMonitor(Node):
         self.reset()
         self.create_subscription(OccupancyGrid, "/nasa/slope", self.on_slope, LATCHED)
         self.create_subscription(PoseStamped, "/astronaut/pose", self.on_pose, 10)
+        self.create_subscription(String, "/rover/config", self.on_rover_config, LATCHED)
+        self.spare_o2_hours = 0.0
+        self.spare_in_field = False
+        self.support_rover = None
         self.status_pub = self.create_publisher(String, "/suit/status", 10)
         self.return_pub = self.create_publisher(PoseStamped, "/suit/return_point", LATCHED)
+
+    def on_rover_config(self, msg):
+        config = json.loads(msg.data)
+        self.support_rover = config.get("rover_name")
+        self.spare_o2_hours = float(config.get("extra_o2_hours", 0))
+        # The helper robot walks with the astronaut, so its spare oxygen can be
+        # used in the field; a crew rover waits at the return point.
+        self.spare_in_field = config.get("rover") == "helper_robot"
 
     def reset(self):
         self.o2 = 1.0  # share of a full tank
@@ -90,7 +102,8 @@ class SuitMonitor(Node):
 
         o2_left_min = self.o2 * p("o2_hours").value * 60.0
         return_min = self.walked / p("walk_speed").value / 60.0
-        margin_min = o2_left_min - return_min - p("reserve_min").value
+        field_spare_min = self.spare_o2_hours * 60.0 if self.spare_in_field else 0.0
+        margin_min = o2_left_min + field_spare_min - return_min - p("reserve_min").value
         status = {
             "o2_pct": round(self.o2 * 100, 1),
             "o2_left_min": round(o2_left_min, 1),
@@ -103,6 +116,9 @@ class SuitMonitor(Node):
             # turn back while a quarter of the reserve is still spare
             "turn_back": margin_min < 0.25 * p("reserve_min").value,
             "slope_deg": round(slope, 1),
+            "support_rover": self.support_rover,
+            "spare_o2_h": self.spare_o2_hours,
+            "spare_in_field": self.spare_in_field,
         }
         self.status_pub.publish(String(data=json.dumps(status)))
 
