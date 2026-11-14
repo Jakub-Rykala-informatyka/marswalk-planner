@@ -1,0 +1,46 @@
+{
+  "source": "data/terrain/heights.npy",
+  "grid": [
+    1025,
+    1025
+  ],
+  "cell_m": 2.023493589159,
+  "size_m": 2072.057435298816,
+  "bounds_deg": {
+    "north": -4.867324880999617,
+    "south": -4.902281743233865,
+    "west": 137.27307399893823,
+    "east": 137.30803086117248
+  },
+  "frame": "local metres, origin south-west corner, x east, y north, z up",
+  "npy_rows": "row 0 is the south edge, index [iy, ix] = [y / cell_m, x / cell_m]",
+  "png_rows": "row 0 is the north edge, like a map",
+  "layers": {
+    "slope": {
+      "unit": "deg",
+      "png_black": 0.0,
+      "png_white": 45.0,
+      "min": 0.006912908982485533,
+      "max": 78.77717590332031
+    },
+    "roughness": {
+      "unit": "m",
+      "png_black": 0.0,
+      "png_white": 1.0,
+      "min": 0.01615547388792038,
+      "max": 8.90316390991211
+    },
+    "sky_view": {
+      "unit": "fraction of open sky",
+      "png_black": 0.5,
+      "png_white": 1.0,
+      "min": 0.5287150144577026,
+      "max": 1.0
+    }
+  },
+  "slope_classes": {
+    "clear": "below 15 deg",
+    "amber": "15 to 25 deg",
+    "red": "25 deg and above"
+  }
+}

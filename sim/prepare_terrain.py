@@ -7,6 +7,8 @@ python.sh without starting the simulator.
   crop      -> data/terrain/{heights.npy, texture.jpg, meta.json}
   hires     -> data/terrain/texture_hires.jpg for the same patch, from the
                25 cm orthoimage (large, kept out of the repository)
+  layers    -> data/layers/: slope, roughness and sky-view factor of the patch,
+               as .npy for the planner and .png for the map
 
 Pixel coordinates are (line, sample) of the full DTM, line 0 at the north edge.
 Local coordinates of the patch: metres, origin in the south-west corner,
@@ -129,6 +131,85 @@ def hires():
     print(f"texture_hires.jpg: {side} x {side} px, {key('MAP_SCALE'):.3f} m/px")
 
 
+def sky_view_factor(heights, cell, directions=16, reach_m=200.0, stride=2):
+    """Share of the sky hemisphere not hidden by terrain, 1.0 on an open plain.
+
+    For each direction the highest horizon angle within reach_m is found by
+    shifting the grid; the factor is the mean of cos^2 of those angles.
+    """
+    ny, nx = heights.shape
+    total = np.zeros_like(heights)
+    for azimuth in np.arange(directions) * 2 * np.pi / directions:
+        horizon = np.zeros_like(heights)  # tangent of the horizon angle, flat by default
+        for k in range(stride, int(reach_m / cell) + 1, stride):
+            dx, dy = int(round(np.cos(azimuth) * k)), int(round(np.sin(azimuth) * k))
+            src = heights[max(dy, 0):ny + min(dy, 0), max(dx, 0):nx + min(dx, 0)]
+            dst = (slice(max(-dy, 0), ny + min(-dy, 0)), slice(max(-dx, 0), nx + min(-dx, 0)))
+            rise = (src - heights[dst]) / (np.hypot(dx, dy) * cell)
+            horizon[dst] = np.maximum(horizon[dst], rise)
+        total += 1.0 / (1.0 + horizon ** 2)  # cos^2 of the angle
+    return total / directions
+
+
+def roughness(heights, window=5):
+    """Standard deviation of height around its local mean, in metres."""
+    pad = window // 2
+    padded = np.pad(heights, pad, mode="edge")
+    views = np.lib.stride_tricks.sliding_window_view(padded, (window, window))
+    return views.std(axis=(-1, -2)).astype(np.float32)
+
+
+def layers():
+    """Derive the planner and map layers from the height grid of the patch."""
+    terrain = ROOT / "data" / "terrain"
+    out = ROOT / "data" / "layers"
+    out.mkdir(parents=True, exist_ok=True)
+    patch = json.loads((terrain / "meta.json").read_text())
+    heights = np.load(terrain / "heights.npy")
+    cell = patch["cell_m"]
+
+    dz_dy, dz_dx = np.gradient(heights, cell)
+    slope = np.degrees(np.arctan(np.hypot(dz_dx, dz_dy))).astype(np.float32)
+    rough = roughness(heights)
+    sky = sky_view_factor(heights, cell).astype(np.float32)
+
+    # name: (array, unit, value shown as black, value shown as white)
+    products = {
+        "slope": (slope, "deg", 0.0, 45.0),
+        "roughness": (rough, "m", 0.0, 1.0),
+        "sky_view": (sky, "fraction of open sky", 0.5, 1.0),
+    }
+    described = {}
+    for name, (array, unit, lo, hi) in products.items():
+        np.save(out / f"{name}.npy", array)
+        gray = np.clip((array - lo) / (hi - lo), 0, 1)
+        Image.fromarray((np.flipud(gray) * 255).astype(np.uint8)).save(out / f"{name}.png")
+        described[name] = {"unit": unit, "png_black": lo, "png_white": hi,
+                           "min": float(array.min()), "max": float(array.max())}
+
+    # Walkability classes for a map overlay: clear below 15 deg, amber to 25 deg, red above
+    classes = np.zeros((*slope.shape, 4), dtype=np.uint8)
+    classes[(slope >= 15) & (slope < 25)] = (255, 190, 0, 150)
+    classes[slope >= 25] = (220, 30, 30, 170)
+    Image.fromarray(np.flipud(classes)).save(out / "slope_classes.png")
+
+    meta = {
+        "source": "data/terrain/heights.npy",
+        "grid": patch["grid"],
+        "cell_m": cell,
+        "size_m": patch["size_m"],
+        "bounds_deg": patch["bounds_deg"],
+        "frame": patch["frame"],
+        "npy_rows": "row 0 is the south edge, index [iy, ix] = [y / cell_m, x / cell_m]",
+        "png_rows": "row 0 is the north edge, like a map",
+        "layers": described,
+        "slope_classes": {"clear": "below 15 deg", "amber": "15 to 25 deg", "red": "25 deg and above"},
+    }
+    (ROOT / "data" / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
+    for name, info in described.items():
+        print(f"{name}: {info['min']:.2f} .. {info['max']:.2f} {info['unit']}")
+
+
 def crop(line, sample, size, step):
     """Cut size x size pixels with the north-west corner at (line, sample)."""
     dtm, label = open_dtm()
@@ -180,10 +261,13 @@ if __name__ == "__main__":
     p.add_argument("--size", type=int, default=2048, help="patch side, px (about 1 m each)")
     p.add_argument("--step", type=int, default=2, help="keep every n-th height sample")
     sub.add_parser("hires")
+    sub.add_parser("layers")
     args = parser.parse_args()
     if args.cmd == "overview":
         overview(args.step)
     elif args.cmd == "hires":
         hires()
+    elif args.cmd == "layers":
+        layers()
     else:
         crop(args.line, args.sample, args.size, args.step)

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marswalk Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/app/style.css">
+</head>
+<body>
+  <main id="map" aria-label="Map of the terrain patch"></main>
+
+  <aside id="panel">
+    <header>
+      <h1>Marswalk Planner</h1>
+      <p class="site">Mount Sharp, Gale crater · <span id="site-coords"></span></p>
+      <p id="link" class="pill offline">No telemetry</p>
+    </header>
+
+    <section>
+      <h2>Mission clock</h2>
+      <p class="clock" id="clock">--:--</p>
+      <div class="bar"><div id="progress"></div></div>
+      <p class="row"><span>Route walked</span><b id="progress-text">–</b></p>
+    </section>
+
+    <section>
+      <h2><span class="dot astronaut"></span>Astronaut</h2>
+      <p class="row"><span>Position</span><b id="astronaut-position">–</b></p>
+      <p class="row"><span>Elevation</span><b id="astronaut-elevation">–</b></p>
+      <p class="row"><span>Heading</span><b id="astronaut-heading">–</b></p>
+      <p class="row"><span>Ground slope</span><b id="astronaut-slope">–</b></p>
+      <p class="row"><span>Open sky</span><b id="astronaut-sky">–</b></p>
+    </section>
+
+    <section>
+      <h2><span class="dot rover"></span>Support rover</h2>
+      <p class="row"><span>State</span><b id="rover-state">–</b></p>
+      <p class="row"><span>Distance to astronaut</span><b id="rover-distance">–</b></p>
+      <p class="row"><span>Position</span><b id="rover-position">–</b></p>
+    </section>
+
+    <section>
+      <h2>Layers</h2>
+      <div id="layers"></div>
+      <ul class="legend" id="legend" hidden>
+        <li><i style="background:#ffbe00"></i>Slope 15–25°, slow going</li>
+        <li><i style="background:#dc1e1e"></i>Slope above 25°, keep out</li>
+      </ul>
+    </section>
+
+    <footer>
+      Terrain and imagery: NASA/JPL-Caltech/UArizona, HiRISE
+      <span id="sources"></span>. Image colour is a tint, not measured data.
+    </footer>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/app/app.js"></script>
+</body>
+</html>

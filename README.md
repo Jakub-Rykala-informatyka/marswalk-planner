@@ -8,20 +8,34 @@ A layered map and route planner for a crewed walk on Mars, built for the boxwork
 
 | Folder | Contents | Owner |
 | --- | --- | --- |
-| `data/` | terrain layers (`layers/`), `meta.json`, `route.geojson`; raw downloads stay local in `raw/` | Kuba |
-| `planner/` | cost map and A* route planner | Rafał |
-| `ros/` | ROS 2 nodes (suit sensors) and the WebSocket telemetry server | Rafał, Kuba |
-| `sim/` | Isaac Sim scene and scripts | Kuba |
-| `app/` | web app: habitat screen and HUD mode | Gosia |
-| `media/` | slides, video, screenshots | Dominika, Wanessa |
+| `data/` | terrain patch (`terrain/`), derived layers (`layers/`), `meta.json`, routes; raw downloads stay local in `raw/` | Kuba |
+| `sim/` | Isaac Sim scene, rover drive and terrain preparation scripts | Kuba |
+| `app/` | web dashboard: map, layers, live positions | Kuba |
+| `ros/` | ROS 2 nodes and the telemetry server for the browser | Rafał, Kuba |
+| `planner/` | cost map and route planner | Rafał, Kuba |
+| `scripts/` | launchers: simulation, dashboard, ROS 2 shell | Kuba |
+| `docker/` | ROS 2 Humble image | Kuba |
+| `media/` | slides, video, screenshots, CAD renders | Dominika, Wanessa, Gosia |
 | `docs/` | challenge text, NASA resources, reports, team plan (in Polish) | all |
+
+## Quick start
+
+```bash
+./scripts/run_dashboard.sh   # dashboard on http://localhost:8080
+./scripts/run_sim.sh         # Isaac Sim, publishes to ROS 2
+```
+
+The simulation needs the raw HiRISE files in `data/raw/` and one run of
+`sim/prepare_terrain.py` (`hires`) and `sim/build_scene.py`. The dashboard
+works from the files already in `data/`.
 
 ## Shared conventions
 
 - Coordinates: local metres, origin at the south-west corner of the terrain crop, x east, y north.
-- Layers: PNG files with the same size as the DTM crop, described in `data/meta.json`.
-- Route: `data/route.geojson`.
-- Live telemetry: one JSON message over WebSocket, format in `docs/plan_dzialania.md`.
+- Layers: `data/layers/*.npy` (values) and `*.png` (images), described in `data/meta.json`.
+- Route: GeoJSON in local metres, for now `data/route_example.geojson`.
+- ROS 2 topics: `ros/README.md`.
+- Live telemetry for the browser: one JSON message over WebSocket, format in `docs/plan_dzialania.md`.
 
 ## Use of AI tools
 

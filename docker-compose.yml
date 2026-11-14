@@ -1,0 +1,19 @@
+services:
+  ros2:
+    build:
+      context: ./docker
+      args:
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+    image: marswalk_ros2:humble
+    network_mode: host  # DDS must see Isaac Sim running on the host
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      - ./:/workspace
+    environment:
+      - ROS_DOMAIN_ID=43  # apart from the other projects on this laptop (0 and 42)
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/ros/fastdds.xml
+    command: bash

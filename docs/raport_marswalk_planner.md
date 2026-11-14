@@ -22,11 +22,11 @@ Zbudowaliśmy **Marswalk Planner**: narzędzie do planowania i prowadzenia piesz
 - **Przelot w Isaac Sim.** Trasa oglądana z perspektywy astronauty, nagrana jako wideo.
 
 **Podział pracy w zespole:**
-- Jakub (Head of Software): potok danych terenu i scena w Isaac Sim, pomoc przy ROS 2. Ma do tego dwa przygotowania:
+- Jakub (Head of Software): symulacja w Isaac Sim, dane terenu, aplikacja w przeglądarce i most do ROS 2. Ma do tego dwa przygotowania:
   - z pracy inżynierskiej, w której Nav2 prowadzi robota Unitree Go2 w Isaac Sim: mapy kosztów, planowanie ruchu i scenę w Isaac Sim,
   - ze Smooth Mappera z HackYeah 2026: przejście od surowych danych do działającej mapy w przeglądarce w czasie hackathonu.
-- Rafał: ROS 2, czyli węzły czujników skafandra, planer trasy i dane na żywo dla aplikacji. Pracował razem z Jakubem.
-- Gosia: aplikacja w przeglądarce, czyli ekran habitatu i tryb HUD.
+- Rafał: tryb HUD w okularach i węzły ROS 2 (mapa kosztów, planer, czujniki skafandra), razem z Jakubem.
+- Gosia: modele CAD łazików, czyli narzędzia i ramiona robotyczne oraz nadwozie łazika osobowego.
 - Dominika i Wanessa: film prezentacyjny (30 sekund), prezentacja (7 slajdów) i zgłoszenie projektu.
 
 ---
