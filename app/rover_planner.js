@@ -37,7 +37,7 @@ async function loadCad(ids) {
 
 export async function initPlanner({ send }) {
   const catalog = await (await fetch("/app/rover_catalog.json")).json();
-  await loadCad([...catalog.rovers.map((r) => r.id), ...catalog.equipment.map((e) => e.id)]);
+  await loadCad([...catalog.rovers.map((r) => r.id), ...catalog.rovers.map((r) => `${r.id}_wheel`), ...catalog.equipment.map((e) => e.id)]);
   const rovers = Object.fromEntries(catalog.rovers.map((r) => [r.id, r]));
   const items = Object.fromEntries(catalog.equipment.map((e) => [e.id, e]));
   $("planner-note").textContent = catalog.note;
@@ -250,9 +250,29 @@ export async function initPlanner({ send }) {
       body.scale.setScalar(cadScale[plan.rover]);
       const bounds = new THREE.Box3().setFromObject(body);
       const centre = bounds.getCenter(new THREE.Vector3());
-      body.position.set(-centre.x, -bounds.min.y, -centre.z);
+      const lift = R * 1.3; // the body rests on the wheels, as in the stand-in
+      body.position.set(-centre.x, lift - bounds.min.y, -centre.z);
       model.add(body);
-      top = bounds.max.y - bounds.min.y;
+      top = lift + (bounds.max.y - bounds.min.y);
+      // Wheels: Gosia exports some bodies without them, so the wheel part is placed at the catalogue spots
+      const wheelModel = cadScenes[`${plan.rover}_wheel`];
+      let hasWheels = false;
+      body.traverse((node) => { if (/wheel/i.test(node.name)) hasWheels = true; });
+      if (wheelModel && !hasWheels) {
+        const xs = wheels > 4 ? [-0.38 * L, 0, 0.38 * L] : [-0.36 * L, 0.36 * L];
+        for (const x of xs) {
+          for (const side of [-1, 1]) {
+            const wheel = wheelModel.clone(true);
+            wheel.scale.setScalar(cadScale[`${plan.rover}_wheel`]);
+            wheel.rotation.x = Math.PI / 2; // the export lies flat: its thin axis is Y, the wheel's axle is Z
+            wheel.updateMatrixWorld(true);
+            const wb = new THREE.Box3().setFromObject(wheel);
+            const wc = wb.getCenter(new THREE.Vector3());
+            wheel.position.set(x - wc.x, R - wc.y, side * (W / 2 + 0.15) - wc.z);
+            model.add(wheel);
+          }
+        }
+      }
     } else {
       const chassis = box(L, H, W, color);
       chassis.position.y = deckY;
@@ -295,6 +315,21 @@ export async function initPlanner({ send }) {
       mast: [[-L * 0.46, top, W * 0.45]],
       deck: cabin ? [[L * 0.02, roof, 0], [L * 0.24, roof, 0]] : [[-L * 0.42, top + 0.02, -W * 0.15], [L * 0.25, top + 0.02, 0]],
     };
+    // Gosia's bodies carry empty nodes named mount_<slot>_<n> where each part goes
+    if (bodyModel) {
+      model.updateMatrixWorld(true);
+      const found = { arm: [], bay: [], mast: [], deck: [] };
+      model.traverse((node) => {
+        const m = /^mount_(arm|bay|mast|deck)_(\d+)$/.exec(node.name);
+        if (m) found[m[1]].push({ n: Number(m[2]), at: node.getWorldPosition(new THREE.Vector3()) });
+      });
+      for (const slot of Object.keys(found)) {
+        if (found[slot].length) {
+          found[slot].sort((a, b) => a.n - b.n);
+          slotSpots[slot] = found[slot].map(({ at }) => [at.x, at.y, at.z]);
+        }
+      }
+    }
     const used = { arm: 0, bay: 0, mast: 0, deck: 0 };
     let mastHeight = 0;
     for (const [id, count] of Object.entries(plan.equipment)) {
