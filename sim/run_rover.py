@@ -48,6 +48,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 TERRAIN = ROOT / "data" / "terrain"
 USD_PATH = TERRAIN / "mars_gale.usd"
 FRAMES = ROOT / "media" / "frames"
+SUIT_USD = ROOT / "sim" / "assets" / "z2_spacesuit" / "z2_spacesuit.usd"
+SUIT_FACING_DEG = 90.0  # the suit model faces -y; this turns it to +x, the walking direction
 LOG_PATH = ROOT / "data" / "preview" / "rover_log.csv"
 
 MARS_GRAVITY = 3.72  # m/s^2
@@ -212,13 +214,22 @@ if ros:
 
     add_sensors(world.stage, "/World/Rover")
 
-# Astronaut marker: no physics, placed on the terrain every step
-astronaut = UsdGeom.Capsule.Define(world.stage, "/World/Astronaut")
-astronaut.CreateRadiusAttr(0.28)
-astronaut.CreateHeightAttr(ASTRONAUT_HEIGHT - 0.56)
-astronaut.CreateAxisAttr("Z")
-astronaut.CreateDisplayColorAttr([Gf.Vec3f(0.92, 0.92, 0.90)])
-astronaut_op = UsdGeom.Xformable(astronaut).AddTranslateOp()
+# Astronaut: NASA's Z2 spacesuit if sim/prepare_astronaut.py has made it, else a
+# capsule. No physics; placed on the terrain and turned to the walking direction.
+astronaut_prim = UsdGeom.Xform.Define(world.stage, "/World/Astronaut")
+if SUIT_USD.exists():
+    astronaut_prim.GetPrim().GetReferences().AddReference(str(SUIT_USD))
+    suit_base = 0.0  # the suit model stands on its own origin
+else:
+    capsule = UsdGeom.Capsule.Define(world.stage, "/World/Astronaut/Body")
+    capsule.CreateRadiusAttr(0.28)
+    capsule.CreateHeightAttr(ASTRONAUT_HEIGHT - 0.56)
+    capsule.CreateAxisAttr("Z")
+    capsule.CreateDisplayColorAttr([Gf.Vec3f(0.92, 0.92, 0.90)])
+    suit_base = ASTRONAUT_HEIGHT / 2
+astronaut_xform = UsdGeom.Xformable(astronaut_prim)
+astronaut_op = astronaut_xform.AddTranslateOp()
+astronaut_turn = astronaut_xform.AddRotateZOp()
 
 camera = UsdGeom.Camera.Define(world.stage, "/World/Cameras/Follow")
 camera.CreateFocalLengthAttr(18.0)
@@ -264,7 +275,8 @@ while simulation_app.is_running() and step * PHYSICS_DT < args.max_time:
     astronaut_xy = route.point(astronaut_s)
     astronaut_z = ground_height(heights, cell, *astronaut_xy)
     astronaut_yaw = route.heading(astronaut_s)
-    astronaut_op.Set(Gf.Vec3d(astronaut_xy[0], astronaut_xy[1], astronaut_z + ASTRONAUT_HEIGHT / 2))
+    astronaut_op.Set(Gf.Vec3d(astronaut_xy[0], astronaut_xy[1], astronaut_z + suit_base))
+    astronaut_turn.Set(math.degrees(astronaut_yaw) + SUIT_FACING_DEG)
 
     position, orientation = rover.get_world_pose()
     yaw = yaw_of(orientation)

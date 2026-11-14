@@ -38,3 +38,4 @@ data/preview/
 data/terrain/*.usd
 media/frames/
 data/terrain/texture_hires.jpg
+sim/assets/

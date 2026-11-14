@@ -32,8 +32,9 @@ def _camera(stage, path, focal_length):
 def place_helmet_camera(stage, eye, yaw):
     """Point the helmet camera along the walking direction, a little down."""
     forward = Gf.Vec3d(math.cos(yaw), math.sin(yaw), -0.12)
-    # Visor in front of the body: the astronaut capsule would otherwise fill the view
-    visor = Gf.Vec3d(*eye) + 0.4 * Gf.Vec3d(forward[0], forward[1], 0.0)
+    # Just in front of the helmet bubble (it reaches 0.38 m forward), so the
+    # camera is not inside the suit model
+    visor = Gf.Vec3d(*eye) + 0.5 * Gf.Vec3d(forward[0], forward[1], 0.0)
     view = Gf.Matrix4d().SetLookAt(visor, visor + forward, Gf.Vec3d(0, 0, 1))
     xform = UsdGeom.Xformable(stage.GetPrimAtPath(HELMET_CAMERA))
     ops = xform.GetOrderedXformOps()

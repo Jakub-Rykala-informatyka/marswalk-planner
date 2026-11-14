@@ -29,6 +29,21 @@ The simulation needs the raw HiRISE files in `data/raw/` and one run of
 `sim/prepare_terrain.py` (`hires`) and `sim/build_scene.py`. The dashboard
 works from the files already in `data/`.
 
+### Astronaut model (optional)
+
+The astronaut in the simulation is NASA's Z2 spacesuit from
+[NASA 3D Resources](https://github.com/nasa/NASA-3D-Resources). The mesh is
+Draco-compressed, so it is decoded outside Isaac Sim first:
+
+```bash
+curl -L -o data/raw/z2_spacesuit.glb "https://raw.githubusercontent.com/nasa/NASA-3D-Resources/master/3D%20Models/Z2%20Spacesuit/Z2%20Spacesuit.glb"
+python sim/decode_glb.py data/raw/z2_spacesuit.glb sim/assets/z2_spacesuit   # needs numpy and DracoPy
+~/Unitree_Project/IsaacSim/_build/linux-x86_64/release/python.sh sim/prepare_astronaut.py
+```
+
+Without these files the simulation falls back to a white capsule. The model has
+no skeleton, so the astronaut glides along the route.
+
 ## Shared conventions
 
 - Coordinates: local metres, origin at the south-west corner of the terrain crop, x east, y north.
