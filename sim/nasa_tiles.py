@@ -1,16 +1,18 @@
-"""Slide tiles that show the NASA data as NASA delivers it, before we compute anything.
+"""Slide tiles that show the NASA data as NASA delivers it, and our cost map in ROS colours.
 
 - HiRISE orthoimage (RED band, 25 cm): grey, as in the PDS archive. Only the
   contrast stretch from prepare_terrain.py is applied; the Mars tint of the
   dashboard texture is left out.
-- HiRISE terrain model (1 m posts): the elevation in metres, coloured from low
-  (blue) to high (white) over a hillshade so the relief reads.
+- HiRISE terrain model (1 m posts): the elevation itself as grey, black at the
+  lowest point and white at the highest, with nothing computed on top.
+- Cost map: the walking cost from ros/cost_model.py as a ROS occupancy grid
+  is drawn, white = free, black = keep out.
 
-Both are draped on the same terrain mesh and seen from the same camera as the
+All are draped on the same terrain mesh and seen from the same camera as the
 Isaac Sim slide renders (sim/draped_maps.py --slide), here drawn with three.js
 in headless Chrome so it can run while Isaac Sim is busy. Writes
-media/slides/draped/nasa_ortho.png and nasa_dtm.png with a transparent
-background, plus the elevation range for the label.
+media/slides/draped/nasa_ortho.png, nasa_dtm.png and cost_map_grey.png with a
+transparent background, plus the elevation range for the label.
 """
 
 import base64
@@ -31,8 +33,7 @@ TERRAIN = ROOT / "data" / "terrain"
 OUT = ROOT / "media" / "slides" / "draped"
 W, H = 1600, 1200
 CROP_MARGIN = 24
-# Low to high, the usual ramp for Mars elevation maps
-RAMP = np.array([[38, 70, 160], [40, 150, 190], [70, 170, 90], [225, 210, 80], [205, 95, 45], [245, 240, 235]], float)
+TILES = ["nasa_ortho", "nasa_dtm", "cost_map_grey"]
 
 PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
@@ -106,22 +107,21 @@ def main():
     ortho.thumbnail((2048, 2048))
     ortho.convert("RGB").save(work / "nasa_ortho.png")
 
-    # Terrain model: elevation in metres over a hillshade
+    # Terrain model: the elevation itself, lowest point black, highest white
     elevation = meta["elevation_of_z0_m"] + heights
-    share = (heights - heights.min()) / np.ptp(heights)
-    k = share * (len(RAMP) - 1)
-    low = np.minimum(k.astype(int), len(RAMP) - 2)
-    t = (k - low)[..., None]
-    colour = RAMP[low] * (1 - t) + RAMP[low + 1] * t
-    dy, dx = np.gradient(heights, meta["cell_m"])
-    shade = np.clip(0.55 + 0.45 * (np.cos(np.arctan(np.hypot(dx, dy))) - 0.6 * dx / np.hypot(1, np.hypot(dx, dy))), 0, 1)
-    Image.fromarray(np.flipud((colour * shade[..., None]).clip(0, 255).astype(np.uint8))).save(work / "nasa_dtm.png")
+    grey = (heights - heights.min()) / np.ptp(heights) * 255
+    Image.fromarray(np.flipud(grey.astype(np.uint8))).convert("RGB").save(work / "nasa_dtm.png")
+
+    # Cost map as ROS draws an occupancy grid: 0 = white, 100 (keep out) = black
+    from costmap_slide import compute
+    total = compute()[2]
+    grey = 255 - np.clip(total, 0, 100) * 2.55
+    Image.fromarray(np.flipud(grey.astype(np.uint8))).convert("RGB").save(work / "cost_map_grey.png")
 
     step = 2
     z = heights[::step, ::step].astype(np.float32)
     (work / "heights.bin").write_bytes(z.tobytes())
-    (work / "grid.json").write_text(json.dumps({"n": z.shape[0], "cell": meta["cell_m"] * step,
-                                                "textures": ["nasa_ortho", "nasa_dtm"]}))
+    (work / "grid.json").write_text(json.dumps({"n": z.shape[0], "cell": meta["cell_m"] * step, "textures": TILES}))
     (work / "index.html").write_text(PAGE % {"W": W, "H": H})
 
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(work))
@@ -136,7 +136,7 @@ def main():
         server.shutdown()
 
     OUT.mkdir(parents=True, exist_ok=True)
-    for name in ("nasa_ortho", "nasa_dtm"):
+    for name in TILES:
         m = re.search(rf'id="out_{name}">data:image/png;base64,([^<]+)<', dom)
         if not m:
             raise SystemExit(f"{name}: no image came back from Chrome")
