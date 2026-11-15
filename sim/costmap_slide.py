@@ -42,6 +42,8 @@ BG = (14, 17, 26)
 INK = (236, 238, 242)
 MUTED = (150, 158, 175)
 ACCENT = (0, 214, 240)
+ROUTE = (0, 214, 240)  # the route stays cyan in every theme, it is drawn into the Isaac renders
+ARROW = INK
 KEEP_OUT = (226, 52, 52)
 RAMP = [(242, 234, 216), (222, 150, 74), (150, 52, 40), (52, 16, 30)]  # cheap to expensive
 
@@ -195,7 +197,8 @@ class Tile:
         self.drawn = (x, y, image.width, image.height)
 
 
-def arrow(draw, start, end, colour=INK, width=4, head=16):
+def arrow(draw, start, end, colour=None, width=4, head=16):
+    colour = colour or ARROW
     (x0, y0), (x1, y1) = start, end
     angle = math.atan2(y1 - y0, x1 - x0)
     tip_base = (x1 - head * math.cos(angle), y1 - head * math.sin(angle))
@@ -273,20 +276,25 @@ def main():
     parser.add_argument("--style", choices=["flat", "isaac"], default="flat",
                         help="flat tilted maps, or the Isaac Sim renders on the 3D terrain")
     parser.add_argument("--lang", choices=["en", "pl"], default="en")
+    parser.add_argument("--canva", action="store_true",
+                        help="for the team's Canva deck: orange accents, no title, transparent background")
     args = parser.parse_args()
-    global LANG
+    global LANG, ACCENT, ARROW
     LANG = args.lang
-    name = "costmap_pipeline" + ("_3d" if args.style == "isaac" else "") + ("_pl" if args.lang == "pl" else "")
+    if args.canva:
+        ACCENT = ARROW = (232, 82, 30)  # the deck's orange
+    name = "costmap_pipeline" + ("_3d" if args.style == "isaac" else "") + ("_pl" if args.lang == "pl" else "") + ("_canva" if args.canva else "")
     out = SLIDES / f"{name}.png"
     raw, terms, total, points, cell, stats, p = compute()
     n = total.shape[0]
 
-    slide = Image.new("RGBA", (W, H), BG + (255,))
+    slide = Image.new("RGBA", (W, H), BG + (0 if args.canva else 255,))
     draw = ImageDraw.Draw(slide)
-    draw.text((70, 52), t("From NASA data to a safe walking route"), font=font(46, bold=True), fill=INK)
-    draw.text((72, 114), t("Gale crater, lower Mount Sharp: 2 x 2 km HiRISE patch, 2 m cells. "
-                           "The same code runs live in our ROS 2 cost map and planner nodes."),
-              font=font(21), fill=MUTED)
+    if not args.canva:  # the Canva slide keeps the deck's own title
+        draw.text((70, 52), t("From NASA data to a safe walking route"), font=font(46, bold=True), fill=INK)
+        draw.text((72, 114), t("Gale crater, lower Mount Sharp: 2 x 2 km HiRISE patch, 2 m cells. "
+                               "The same code runs live in our ROS 2 cost map and planner nodes."),
+                  font=font(21), fill=MUTED)
 
     def place(tile, name, image):
         TEXTURES.mkdir(parents=True, exist_ok=True)
@@ -370,8 +378,8 @@ def main():
     ortho.alpha_composite(Image.fromarray(no_go))
     route_draw = ImageDraw.Draw(ortho)
     px = [(x / cell, n - 1 - y / cell) for x, y in points]
-    route_draw.line(px, fill=ACCENT + (255,), width=30, joint="curve")
-    for (x, y), colour in ((px[0], (255, 255, 255)), (px[-1], ACCENT)):
+    route_draw.line(px, fill=ROUTE + (255,), width=30, joint="curve")
+    for (x, y), colour in ((px[0], (255, 255, 255)), (px[-1], ROUTE)):
         route_draw.ellipse([x - 42, y - 42, x + 42, y + 42], fill=colour + (255,), outline=BG + (255,), width=10)
     route_tile = Tile(col3, row4, bw, bd4, bsk)
     place(route_tile, "route", ortho)
@@ -403,7 +411,10 @@ def main():
                             "not a measurement at each place."), font=font(16), fill=MUTED)
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    slide.convert("RGB").save(out, optimize=True)
+    if args.canva:
+        slide.crop(slide.getchannel("A").getbbox()).save(out, optimize=True)
+    else:
+        slide.convert("RGB").save(out, optimize=True)
     print(f"saved {out.relative_to(ROOT)}: route {stats['length']:.0f} m, {stats['minutes']:.0f} min, "
           f"{stats['dose']:.1f} uSv, keep out {stats['keep_out']:.0%}, max cost {stats['max_cost']}")
 
