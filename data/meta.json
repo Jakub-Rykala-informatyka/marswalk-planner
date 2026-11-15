@@ -43,6 +43,39 @@
       "png_white": 26.666666666666668,
       "min": 14.099066734313965,
       "max": 26.66666603088379
+    },
+    "themis_night": {
+      "unit": "relative night IR brightness (0..255)",
+      "png_black": 0.0,
+      "png_white": 255.0,
+      "min": 114.03515625,
+      "max": 245.91893005371094,
+      "source": "Mars Odyssey THEMIS night IR controlled mosaic, 100 m (NASA Mars Trek, THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018)",
+      "pixel_m": 81
+    },
+    "sand": {
+      "unit": "share 0..1",
+      "png": "amber, clear at 0, strongest at 1",
+      "min": 0.0,
+      "max": 1.0,
+      "formula": "(median - night) / (median - 5th percentile), night median 178, 5th percentile 138",
+      "limits": "relative within this patch; THEMIS pixels are about 80 m, so it marks sandy areas, not single dunes"
+    },
+    "hydration": {
+      "unit": "CRISM band depth BD1900_2",
+      "png": "clear below 0.005, full colour at 0.03",
+      "min": -0.01713191159069538,
+      "max": 0.020100953057408333,
+      "share_above_clear": 0.314513741820345,
+      "source": "MRO CRISM MTRDR FRT0001BBA1 refined summary parameters (SR165J), 18 m"
+    },
+    "sulfate": {
+      "unit": "CRISM band depth SINDEX2",
+      "png": "clear below 0.01, full colour at 0.04",
+      "min": -0.01179460808634758,
+      "max": 0.014225242659449577,
+      "share_above_clear": 0.008640571088637715,
+      "source": "MRO CRISM MTRDR FRT0001BBA1 refined summary parameters (SR165J), 18 m"
     }
   },
   "slope_classes": {
@@ -56,5 +89,16 @@
     "formula": "dose_rate = open_ground_rate * sky_view",
     "limits": "galactic cosmic rays only; ignores the angular spread of the flux, secondary particles from the ground and solar particle events",
     "dose_shelter_png": "transparent above 97 % of the open-ground dose, full teal at 70 % and below"
+  },
+  "crism_registration": {
+    "shift_px": {
+      "lines": 6,
+      "samples": 10
+    },
+    "shift_m": {
+      "south": 108,
+      "east": 180
+    },
+    "match": "R770 against the HiRISE image, correlation 0.81"
   }
 }

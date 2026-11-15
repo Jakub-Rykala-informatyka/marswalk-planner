@@ -1,6 +1,6 @@
 """ROS 2 node that builds cost maps for walking and for the crew rover from the NASA layers.
 
-Subscribes to /nasa/slope, /nasa/roughness and /nasa/dose_rate (from
+Subscribes to /nasa/slope, /nasa/roughness, /nasa/dose_rate and /nasa/sand (from
 nasa_layers) and publishes /costmap/walk and /costmap/rover as latched
 OccupancyGrids: 0 = free, 1..99 = harder going, 100 = keep out. Weights and
 limits are ROS parameters; changing one recomputes the maps, for example:
@@ -29,7 +29,7 @@ LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
 SLOPE_FULL_DEG = 45.0
 ROUGHNESS_FULL_M = 2.0
 
-LAYERS = ("slope", "roughness", "dose_rate")
+LAYERS = ("slope", "roughness", "dose_rate", "sand")
 
 
 def grid_values(msg):
@@ -81,8 +81,9 @@ class Costmap(Node):
         slope = self.layers["slope"] / 100.0 * SLOPE_FULL_DEG
         roughness = self.layers["roughness"] / 100.0 * ROUGHNESS_FULL_M
         dose_share = self.layers["dose_rate"] / 100.0
+        sand_share = self.layers["sand"] / 100.0
         for variant, publisher in self.publishers_.items():
-            values = cost(slope, roughness, dose_share, self.params(variant))
+            values = cost(slope, roughness, dose_share, self.params(variant), sand_share)
             msg = OccupancyGrid()
             msg.header.frame_id = "map"
             msg.header.stamp = self.get_clock().now().to_msg()

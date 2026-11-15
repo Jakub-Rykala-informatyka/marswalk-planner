@@ -15,6 +15,8 @@ const LAYERS = [
   { id: "slope", name: "Slope", file: "/data/layers/slope.png", opacity: 0.6 },
   { id: "roughness", name: "Roughness", file: "/data/layers/roughness.png", opacity: 0.6 },
   { id: "dose_shelter", name: "Radiation shelter", file: "/data/layers/dose_shelter.png", opacity: 0.9, legend: "shelter-legend" },
+  { id: "sand", name: "Loose sand (THEMIS night IR)", file: "/data/layers/sand.png", opacity: 0.8, legend: "sand-legend" },
+  { id: "hydration", name: "Bound water (CRISM)", file: "/data/layers/hydration.png", opacity: 0.9, legend: "hydration-legend" },
   { id: "cost_walk", name: "Cost: walking", costmap: "walk", opacity: 0.7, legend: "cost-legend" },
   { id: "cost_rover", name: "Cost: crew rover", costmap: "rover", opacity: 0.7, legend: "cost-legend" },
 ];

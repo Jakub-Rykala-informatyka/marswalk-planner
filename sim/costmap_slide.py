@@ -226,13 +226,14 @@ def compute():
     meta = json.loads((ROOT / "data" / "meta.json").read_text())
     open_rate = meta["dose_model"]["open_ground_uSv_per_h"]
     cell = meta["cell_m"]
-    raw = {name: np.load(LAYERS / f"{name}.npy") for name in ("slope", "roughness", "dose_rate")}
+    raw = {name: np.load(LAYERS / f"{name}.npy") for name in ("slope", "roughness", "dose_rate", "sand")}
 
     # What the cost map node receives: each layer as a 0..100 occupancy grid
     quantise = lambda v, full: np.clip(np.rint(v / full * 100), 0, 100) / 100
     slope = quantise(raw["slope"], SLOPE_FULL_DEG) * SLOPE_FULL_DEG
     roughness = quantise(raw["roughness"], ROUGHNESS_FULL_M) * ROUGHNESS_FULL_M
     dose_share = quantise(raw["dose_rate"], open_rate)
+    sand_share = quantise(raw["sand"], 1.0)
 
     p = DEFAULTS["walk"]
     over = np.clip((slope - p["comfort_slope_deg"]) / (p["max_slope_deg"] - p["comfort_slope_deg"]), 0, 1)
@@ -241,8 +242,9 @@ def compute():
         "slope": p["slope_weight"] * (0.2 * gentle + 0.8 * over ** 2),
         "roughness": p["roughness_weight"] * np.clip(roughness / p["max_roughness_m"], 0, 1),
         "dose": p["dose_weight"] * dose_share,
+        "sand": p["sand_weight"] * sand_share,
     }
-    total = cost(slope, roughness, dose_share, p).astype(np.int16)
+    total = cost(slope, roughness, dose_share, p, sand_share).astype(np.int16)
 
     # The route the planner node would publish: parking -> boxwork field west (mission target B)
     mission = json.loads((ROOT / "data" / "mission_boxwork.json").read_text())

@@ -24,9 +24,9 @@ for another route.
 | `marswalk_sim` | `sim/run_rover.py` (Isaac Sim) | `/route` | `/clock`, `/astronaut/pose`, `/rover/pose`, `/rover/state` |
 | sensor graph | `sim/sensors.py` (Isaac Sim) | – | `/rover/points`, `/rover/camera/image`, `/astronaut/camera/image`, `/rover/arm_camera/image` |
 | rover arm | `sim/arm.py` (Isaac Sim) | `/rover/arm/command` | `/rover/arm/joint_states` |
-| `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate` |
+| `nasa_layers` | `ros/nasa_layers.py` | – (reads `data/layers/`) | `/nasa/slope`, `/nasa/roughness`, `/nasa/sky_view`, `/nasa/dose_rate`, `/nasa/sand` |
 | `dose_monitor` | `ros/dose_monitor.py` | `/nasa/dose_rate`, `/astronaut/pose` | `/astronaut/dose_rate`, `/astronaut/dose` |
-| `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate` | `/costmap/walk`, `/costmap/rover` |
+| `costmap` | `ros/costmap.py` | `/nasa/slope`, `/nasa/roughness`, `/nasa/dose_rate`, `/nasa/sand` | `/costmap/walk`, `/costmap/rover` |
 | `suit_monitor` | `ros/suit_monitor.py` | `/astronaut/pose`, `/nasa/slope` | `/suit/status`, `/suit/return_point` |
 | `planner` | `ros/planner.py` | `/costmap/walk`, `/nasa/dose_rate`, `/astronaut/pose`, `/goal_pose` | `/route`, `/route/summary` |
 | `marswalk_telemetry` | `ros/telemetry_server.py` | everything above | WebSocket `/ws` for the browser, `/goal_pose` from map clicks, `/rover/config` from the rover planner tab |
@@ -44,6 +44,7 @@ south-west of the map origin. Values are 0..100:
 | `/nasa/roughness` | 2 m height spread or more | HiRISE DTM |
 | `/nasa/sky_view` | open sky, no terrain above the horizon | HiRISE DTM |
 | `/nasa/dose_rate` | 26.7 µSv/h, the open-ground rate measured by RAD | RAD on Curiosity × sky view |
+| `/nasa/sand` | the coldest ground of the patch at night: likely loose sand | THEMIS night IR (Mars Odyssey), about 80 m pixels |
 
 The dose model is a simplification (cosmic rays only, scaled by open sky); its
 limits are written in `data/meta.json` under `dose_model`.
@@ -53,8 +54,8 @@ limits are written in `data/meta.json` under `dose_model`.
 `/costmap/walk` and `/costmap/rover` are latched `nav_msgs/OccupancyGrid`s on the
 same grid as `/nasa/*`: 0 = free, 1..99 = harder going, 100 = keep out (the
 Nav2 convention). Each cell adds a slope term (mild below the comfort slope,
-growing fast towards the limit), a roughness term and a dose term; a cell at
-or over the slope or roughness limit is 100.
+growing fast towards the limit), a roughness term, a dose term and a sand term;
+a cell at or over the slope or roughness limit is 100.
 
 Defaults are assumptions to tune, not measured limits:
 
@@ -64,8 +65,12 @@ Defaults are assumptions to tune, not measured limits:
 | `comfort_slope_deg` | 15 | 8 |
 | `max_roughness_m` | 2.0 | 1.0 |
 | `slope_weight` / `roughness_weight` / `dose_weight` | 70 / 15 / 10 | 70 / 25 / 0 |
+| `sand_weight` | 10 | 20 |
 
-The rover has no dose weight because the cabin shields the crew. Change a
+The rover has no dose weight because the cabin shields the crew, and a higher
+sand weight because loose sand can trap its wheels. The sand and CRISM mineral
+layers come from `sim/prepare_orbital_layers.py`; the dashboard also shows
+`hydration` (CRISM BD1900_2, water bound in minerals) for picking targets. Change a
 value live and both maps are recomputed and redrawn on the dashboard:
 
 ```bash

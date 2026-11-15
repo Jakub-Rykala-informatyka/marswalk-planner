@@ -25,6 +25,7 @@ SCALES = {
     "roughness": 2.0,  # m, the walking keep-out limit in costmap.py
     "sky_view": 1.0,  # fraction of open sky
     "dose_rate": None,  # filled from data/meta.json: open-ground rate from RAD
+    "sand": 1.0,  # share 0..1, loose sand from THEMIS night IR (sim/prepare_orbital_layers.py)
 }
 
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,

@@ -14,11 +14,11 @@ Mapy Marsa, które dziś mamy, pokazują regiony i całą planetę. Wyjście ast
 
 ## 3. Dane NASA
 
-Zaczęliśmy od danych NASA. Model terenu HiRISE z rozdzielczością jednego metra daje nam nachylenie, szorstkość i to, ile nieba widać nad każdym punktem. Pomiar promieniowania z Curiosity, 0,64 milisiwerta na dobę, zamieniamy w mapę dawki: tam, gdzie teren zasłania niebo, dawka jest mniejsza, więc wychodzi z tego mapa schronień. Każda warstwa pokrywa dokładnie ten sam wycinek dwa na dwa kilometry.
+Zaczęliśmy od danych NASA. Model terenu HiRISE z rozdzielczością jednego metra daje nam nachylenie, szorstkość i to, ile nieba widać nad każdym punktem. CRISM pokazuje minerały, w których jest uwięziona woda, więc wskazuje ciekawe cele. Nocne zdjęcia w podczerwieni z THEMIS pokazują, gdzie grunt szybko stygnie, czyli gdzie leży luźny piasek. Pomiar promieniowania z Curiosity, 0,64 milisiwerta na dobę, zamieniamy w mapę dawki. Każda warstwa pokrywa dokładnie ten sam wycinek dwa na dwa kilometry.
 
 ## 4. Od danych NASA do trasy
 
-Zaczynamy od tego, co naprawdę daje NASA: czarno-białe zdjęcie HiRISE, model wysokości terenu z HiRISE i jedną liczbę z RAD na Curiosity, 0,64 milisiwerta na dobę. Z tego liczymy nachylenie, szorstkość i dawkę, a potem koszt przejścia. Powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% naszego wycinka. A* szuka najtańszej trasy: z parkingu łazika do pola boxwork wychodzi 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów.
+Zaczynamy od tego, co naprawdę daje NASA: czarno-białe zdjęcie HiRISE, model wysokości terenu z HiRISE i jedną liczbę z RAD na Curiosity, 0,64 milisiwerta na dobę. Z tego liczymy nachylenie, szorstkość i dawkę, a z THEMIS piasek, i z tego koszt przejścia. Powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% naszego wycinka. A* szuka najtańszej trasy: z parkingu łazika do pola boxwork wychodzi 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów.
 
 ## 5. Planer misji
 
@@ -30,7 +30,7 @@ Całość sprawdziliśmy w symulacji. W Isaac Sim astronauta w modelu skafandra 
 
 ## 7. Dla kogo i co dalej
 
-Najwięcej zyskają planiści wyjść, którzy dziś składają te dane ręcznie, i astronauci w trakcie spaceru. Ten sam potok zadziała na danych z Księżyca, więc nadaje się dla misji Artemis i dla misji analogowych na Ziemi. Dalej chcemy dodać warstwy piasku i minerałów z THEMIS i CRISM, alert burzy słonecznej z danych DONKI i sprawdzić model marszu na ludziach w skafandrach. Dziękujemy!
+Najwięcej zyskają planiści wyjść, którzy dziś składają te dane ręcznie, i astronauci w trakcie spaceru. Ten sam potok zadziała na danych z Księżyca, więc nadaje się dla misji Artemis i dla misji analogowych na Ziemi. Warstwy piasku z THEMIS i minerałów z CRISM już są w mapie. Dalej chcemy dodać alert burzy słonecznej z danych DONKI, pokazać minerały przy każdym celu misji i sprawdzić model marszu na ludziach w skafandrach. Dziękujemy!
 
 ---
 
@@ -38,4 +38,5 @@ Najwięcej zyskają planiści wyjść, którzy dziś składają te dane ręcznie
 
 - **Czy dawka to pomiar?** Nie. To model: pomiar RAD z Curiosity razy część otwartego nieba. Mówimy to na slajdzie.
 - **Skąd progi 15° i 25°?** To nasze założenia dla człowieka w skafandrze. W węzłach ROS 2 są parametrami, które można zmienić na żywo.
+- **Czy THEMIS i CRISM są dokładne?** THEMIS ma piksel około 80 m, więc pokazuje obszary piasku, nie pojedyncze wydmy. Sygnał wody w CRISM jest słaby (pył na powierzchni), a siarczanów w tym wycinku praktycznie nie widać. CRISM przesunęliśmy o 180 m, żeby zgadzał się ze zdjęciem HiRISE.
 - **Czy cele boxwork są potwierdzone?** Nie. Ustawiliśmy je na oko na grzbietach przypominających boxwork na zdjęciu HiRISE.

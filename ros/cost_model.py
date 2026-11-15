@@ -12,24 +12,26 @@ import numpy as np
 
 # variant: {parameter: default}. Assumptions to tune, not measured limits.
 DEFAULTS = {
-    # Walking in a suit: easy up to about 15 deg, forbidden from 25 deg
+    # Walking in a suit: easy up to about 15 deg, forbidden from 25 deg; loose sand tires
     "walk": {"max_slope_deg": 25.0, "comfort_slope_deg": 15.0, "slope_weight": 70.0,
-             "max_roughness_m": 2.0, "roughness_weight": 15.0, "dose_weight": 10.0},
-    # Pressurised rover: gentler slopes, no boulder fields, cabin shields the crew
+             "max_roughness_m": 2.0, "roughness_weight": 15.0, "dose_weight": 10.0, "sand_weight": 10.0},
+    # Pressurised rover: gentler slopes, no boulder fields, cabin shields the crew; sand can trap it
     "rover": {"max_slope_deg": 15.0, "comfort_slope_deg": 8.0, "slope_weight": 70.0,
-              "max_roughness_m": 1.0, "roughness_weight": 25.0, "dose_weight": 0.0},
+              "max_roughness_m": 1.0, "roughness_weight": 25.0, "dose_weight": 0.0, "sand_weight": 20.0},
 }
 
 NEIGHBOURS = [(dy, dx, math.hypot(dy, dx)) for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx]
 
 
-def cost(slope_deg, roughness_m, dose_share, p):
-    """Cost 0..100 per cell; dose_share is the dose rate as a share of open ground."""
+def cost(slope_deg, roughness_m, dose_share, p, sand_share=0.0):
+    """Cost 0..100 per cell; dose_share is the dose rate as a share of open ground,
+    sand_share how likely the ground is loose sand (THEMIS night IR, 0..1)."""
     over = np.clip((slope_deg - p["comfort_slope_deg"]) / (p["max_slope_deg"] - p["comfort_slope_deg"]), 0, 1)
     gentle = np.clip(slope_deg / p["comfort_slope_deg"], 0, 1)
     value = (p["slope_weight"] * (0.2 * gentle + 0.8 * over ** 2)
              + p["roughness_weight"] * np.clip(roughness_m / p["max_roughness_m"], 0, 1)
-             + p["dose_weight"] * dose_share)
+             + p["dose_weight"] * dose_share
+             + p.get("sand_weight", 0.0) * sand_share)
     value = np.clip(np.rint(value), 0, 99)
     value[(slope_deg >= p["max_slope_deg"]) | (roughness_m >= p["max_roughness_m"])] = 100
     return value.astype(np.int8)
