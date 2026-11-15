@@ -91,8 +91,13 @@ async function main() {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI * 0.48;
-  controls.minDistance = 8;
+  // Wheel zooms towards the point under the cursor, fast enough to cross the 2 km patch in a few turns,
+  // and close enough to see the suit and the 0.5 m support rover at their real size
+  controls.zoomToCursor = true;
+  controls.zoomSpeed = 2;
+  controls.minDistance = 4;
   controls.maxDistance = 5000;
+  const CAMERA_CLEARANCE = 1.5; // m above the ground: zooming in on a slope must not end inside the hill
 
   scene.add(new THREE.HemisphereLight(0xffe6cc, 0x3a2a20, 1.1));
   const sun = new THREE.DirectionalLight(0xfff0dd, 2.2);
@@ -416,6 +421,8 @@ async function main() {
     // Keep the arrow readable from far away: grow it with the camera distance
     goalMarker.scale.setScalar(Math.max(0.6, camera.position.distanceTo(goalMarker.position) / 250));
     controls.update();
+    const ground = groundAt(camera.position.x, -camera.position.z) + CAMERA_CLEARANCE;
+    if (camera.position.y < ground) camera.position.y = ground;
     renderer.render(scene, camera);
     if (savePngRequested) {
       // Export the whole patch, not the current view: frame all of it, draw, read the canvas
