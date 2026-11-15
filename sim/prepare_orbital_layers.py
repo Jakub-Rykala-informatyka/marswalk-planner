@@ -47,12 +47,13 @@ def patch_grid(meta):
     return np.meshgrid(lat, lon, indexing="ij")
 
 
-def themis(lat, lon):
+def themis(lat, lon, order=1):
+    """Night IR at the patch samples; order 0 keeps THEMIS's own square pixels."""
     tile = np.asarray(Image.open(THEMIS_TILE).convert("L"), np.float32)
     deg = 180.0 / (256 * 2 ** THEMIS_Z)
     lon0, lat0 = -180.0 + THEMIS_COL * 256 * deg, 90.0 - THEMIS_ROW * 256 * deg
     rows, cols = (lat0 - lat) / deg - 0.5, (lon - lon0) / deg - 0.5  # pixel centres
-    return map_coordinates(tile, [rows, cols], order=1, mode="nearest"), deg * 59270  # m per px at the equator
+    return map_coordinates(tile, [rows, cols], order=order, mode="nearest"), deg * 59270  # m per px at the equator
 
 
 def crism_cube():
@@ -85,7 +86,7 @@ def crism_shift(cube, names, projection, meta):
     return best
 
 
-def crism(lat, lon, cube, names, projection, shift):
+def crism(lat, lon, cube, names, projection, shift, order=1):
     res, line_off, sample_off = projection
     _, dy, dx = shift
     rows = line_off - lat * res - 1 + dy  # 1-based PDS lines and samples -> 0-based array index
@@ -94,7 +95,7 @@ def crism(lat, lon, cube, names, projection, shift):
     for name, (band, *_rest) in MINERALS.items():
         values = np.array(cube[names.index(band)], np.float32)
         values[values > 1e30] = np.nan
-        out[name] = map_coordinates(values, [rows, cols], order=1, mode="nearest", cval=np.nan)
+        out[name] = map_coordinates(values, [rows, cols], order=order, mode="nearest", cval=np.nan)
     return out
 
 

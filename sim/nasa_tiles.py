@@ -5,14 +5,16 @@
   dashboard texture is left out.
 - HiRISE terrain model (1 m posts): the elevation itself as grey, black at the
   lowest point and white at the highest, with nothing computed on top.
+- CRISM BD1900_2 (bound water) and THEMIS night IR, each at its own pixel size (18 m and
+  about 80 m), copied pixel by pixel with no smoothing, grey from low to high.
 - Cost map: the walking cost from ros/cost_model.py as a ROS occupancy grid
   is drawn, white = free, black = keep out.
 
 All are draped on the same terrain mesh and seen from the same camera as the
 Isaac Sim slide renders (sim/draped_maps.py --slide), here drawn with three.js
 in headless Chrome so it can run while Isaac Sim is busy. Writes
-media/slides/draped/nasa_ortho.png, nasa_dtm.png and cost_map_grey.png with a
-transparent background, plus the elevation range for the label.
+media/slides/draped/nasa_ortho.png, nasa_dtm.png, nasa_crism.png, nasa_themis.png and
+cost_map_grey.png with a transparent background, plus the value ranges for the labels.
 """
 
 import base64
@@ -33,7 +35,7 @@ TERRAIN = ROOT / "data" / "terrain"
 OUT = ROOT / "media" / "slides" / "draped"
 W, H = 1600, 1200
 CROP_MARGIN = 24
-TILES = ["nasa_ortho", "nasa_dtm", "cost_map_grey"]
+TILES = ["nasa_ortho", "nasa_dtm", "nasa_crism", "nasa_themis", "cost_map_grey"]
 
 PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
@@ -111,6 +113,19 @@ def main():
     elevation = meta["elevation_of_z0_m"] + heights
     grey = (heights - heights.min()) / np.ptp(heights) * 255
     Image.fromarray(np.flipud(grey.astype(np.uint8))).convert("RGB").save(work / "nasa_dtm.png")
+
+    # CRISM and THEMIS at their own pixel size (nearest sample, no smoothing), grey low to high
+    import prepare_orbital_layers as orbital
+    lat, lon = orbital.patch_grid(json.loads((ROOT / "data" / "meta.json").read_text()))
+    shift = json.loads((ROOT / "data" / "meta.json").read_text())["crism_registration"]["shift_px"]
+    cube, names, projection = orbital.crism_cube()
+    water = orbital.crism(lat, lon, cube, names, projection, (0, shift["lines"], shift["samples"]), order=0)["hydration"]
+    lo, hi = np.nanpercentile(water, [1, 99])
+    grey = np.clip((np.nan_to_num(water, nan=lo) - lo) / (hi - lo), 0, 1) * 255
+    Image.fromarray(np.flipud(grey.astype(np.uint8))).convert("RGB").save(work / "nasa_crism.png")
+    night, _ = orbital.themis(lat, lon, order=0)
+    Image.fromarray(np.flipud(night.astype(np.uint8))).convert("RGB").save(work / "nasa_themis.png")
+    print(f"CRISM BD1900_2 shown {lo:.4f} (black) .. {hi:.4f} (white); THEMIS night IR {night.min():.0f}..{night.max():.0f}")
 
     # Cost map as ROS draws an occupancy grid: 0 = white, 100 (keep out) = black
     from costmap_slide import compute
