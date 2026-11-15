@@ -531,9 +531,17 @@ async function main() {
     return sprite;
   }
   const pins = [];
+  // The picker shows the mission the planner is actually running, not a fixed default
+  let shownMission = null;
+  function syncPicker() {
+    const match = [...$("mission-select").options].find((o) => o.text === shownMission);
+    if (match) $("mission-select").value = match.value;
+  }
   async function loadMission() {
     const plan = await (await fetch("/mission")).json();
     renderMission(plan);
+    shownMission = plan?.name ?? null;
+    syncPicker();
     for (const old of [...missionGroup.children]) { missionGroup.remove(old); old.material.map.dispose(); old.material.dispose(); }
     pins.length = 0;
     if (!plan?.ok) return;
@@ -563,11 +571,8 @@ async function main() {
 
   // Mission picker: switches the mission planner's mission over /mission/select
   fetch("/missions").then((r) => r.json()).then((list) => {
-    for (const mission of list) {
-      const option = new Option(mission.name, mission.file);
-      option.selected = mission.file === "mission_boxwork.json";
-      $("mission-select").append(option);
-    }
+    for (const mission of list) $("mission-select").append(new Option(mission.name, mission.file));
+    syncPicker();
   });
   $("mission-select").addEventListener("change", () => {
     if (socket?.readyState !== WebSocket.OPEN) return;
