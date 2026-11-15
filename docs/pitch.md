@@ -16,9 +16,9 @@ Mapy Marsa, które dziś mamy, pokazują regiony i całą planetę. Wyjście ast
 
 Zaczęliśmy od danych NASA. Model terenu HiRISE z rozdzielczością jednego metra daje nam nachylenie, szorstkość i to, ile nieba widać nad każdym punktem. Pomiar promieniowania z Curiosity, 0,64 milisiwerta na dobę, zamieniamy w mapę dawki: tam, gdzie teren zasłania niebo, dawka jest mniejsza, więc wychodzi z tego mapa schronień. Każda warstwa pokrywa dokładnie ten sam wycinek dwa na dwa kilometry.
 
-## 4. Mapa kosztów i trasa
+## 4. Od danych NASA do trasy
 
-Warstwy zamieniamy w koszt przejścia. Najwięcej waży nachylenie: powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% naszego wycinka. Na tej mapie algorytm A* szuka najtańszej trasy. Z parkingu łazika do pola boxwork wychodzi 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów. Ten sam kod działa na żywo w naszych węzłach ROS 2.
+Zaczynamy od tego, co naprawdę daje NASA: czarno-białe zdjęcie HiRISE, model wysokości terenu z HiRISE i jedną liczbę z RAD na Curiosity, 0,64 milisiwerta na dobę. Z tego liczymy nachylenie, szorstkość i dawkę, a potem koszt przejścia. Powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% naszego wycinka. A* szuka najtańszej trasy: z parkingu łazika do pola boxwork wychodzi 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów.
 
 ## 5. Planer misji
 
