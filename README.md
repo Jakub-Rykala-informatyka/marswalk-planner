@@ -59,3 +59,12 @@ Parts of the code, documentation and repository setup in this project were writt
 ## NASA data and resources
 
 See `docs/nasa_data.md` and the data table in `docs/raport_marswalk_planner.md`.
+
+## Third-party assets
+
+- **"Desert Rock Base"** by [bilgehan.korkmaz](https://sketchfab.com/bilgehan.korkmaz) on
+  [Sketchfab](https://sketchfab.com/3d-models/desert-rock-base-62da7c177a6241eebe94c4eba6fc81b7),
+  licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0/). Used as a boulder in the
+  Isaac Sim scenes (`sim/rock.py`: `run_rover.py --rock` and the HUD frame `sim/hud_frame.py`);
+  scaled, turned and placed on the terrain, otherwise unchanged. Download the USDZ from that page into
+  `sim/assets/desert_rock/` (assets stay out of the repository).

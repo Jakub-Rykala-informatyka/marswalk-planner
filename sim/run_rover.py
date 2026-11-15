@@ -33,6 +33,8 @@ parser.add_argument("--work-scale", type=float, default=2.0,
                     help="simulated seconds per minute of work at a mission target (the demo runs fast)")
 parser.add_argument("--capture-fps", type=float, default=10.0, help="frames and ROS messages per simulated second")
 parser.add_argument("--max-time", type=float, default=900.0, help="stop after this many simulated seconds")
+parser.add_argument("--rock", action="store_true",
+                    help="put a boulder (sim/rock.py, CC BY 4.0) beside the route 15 m ahead of the start")
 args = parser.parse_args()
 
 from isaacsim import SimulationApp
@@ -288,6 +290,19 @@ else:
 astronaut_xform = UsdGeom.Xformable(astronaut_prim)
 astronaut_op = astronaut_xform.AddTranslateOp()
 astronaut_turn = astronaut_xform.AddRotateZOp()
+
+# A boulder in the astronaut's view, 2.5 m left of the route so the walk passes beside it
+# (it has no collider, and the planner's cost map does not know it)
+if args.rock:
+    from rock import ROCK_CREDIT, add_rock
+
+    rock_s = min(15.0, route.length)
+    rock_yaw = route.heading(rock_s)
+    rock_x, rock_y = route.point(rock_s) + 2.5 * np.array([-math.sin(rock_yaw), math.cos(rock_yaw)])
+    if add_rock(world.stage, "/World/Rock", rock_x, rock_y, ground_height(heights, cell, rock_x, rock_y)):
+        print(f"boulder {ROCK_CREDIT}: 2.5 m left of the route, {rock_s:.0f} m ahead of the start")
+    else:
+        print("boulder: sim/assets/desert_rock/Desert_Rock_Base.usdz is missing, see sim/rock.py")
 
 camera = UsdGeom.Camera.Define(world.stage, "/World/Cameras/Follow")
 camera.CreateFocalLengthAttr(18.0)
