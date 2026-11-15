@@ -18,7 +18,7 @@ Zaczęliśmy od danych NASA. Model terenu HiRISE z rozdzielczością jednego met
 
 ## 4. Od danych NASA do trasy
 
-Zaczynamy od tego, co naprawdę daje NASA. HiRISE: czarno-białe zdjęcie z rozdzielczością 25 centymetrów i model wysokości terenu. CRISM: widma, z których odczytujemy wodę związaną w minerałach, w pikselach po 18 metrów. THEMIS: nocna podczerwień w pikselach po około 80 metrów, gdzie ciemniej znaczy chłodniej, czyli luźny piasek. I jedna liczba z RAD na Curiosity, 0,64 milisiwerta na dobę. Z tego liczymy koszt przejścia: powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% wycinka. A* szuka najtańszej trasy: 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów.
+Zaczynamy od tego, co naprawdę daje NASA. HiRISE: czarno-białe zdjęcie z rozdzielczością 25 centymetrów i model wysokości terenu. CRISM: widma, z których odczytujemy wodę związaną w minerałach, w pikselach po 18 metrów. THEMIS: nocna podczerwień w pikselach po około 80 metrów, gdzie ciemniej znaczy chłodniej, czyli luźny piasek. I jedna liczba z RAD na Curiosity, 0,64 milisiwerta na dobę. Z tych danych robimy cztery warstwy kosztu i kładziemy je na sobie: nachylenie waży najwięcej, potem szorstkość, piasek i dawka. Suma daje mapę kosztów: powyżej 25 stopni albo przy nierównościach ponad 2 metry teren jest zakazany, i to 9% wycinka. A* szuka na niej najtańszej trasy: 814 metrów zamiast 741 w linii prostej, 17 minut marszu i 7 mikrosiwertów.
 
 ## 5. Planer misji
 
