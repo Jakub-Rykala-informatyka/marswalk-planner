@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { initPlanner } from "./rover_planner.js";
 import { loadToolNames, renderMission } from "./mission.js";
 
@@ -193,13 +194,47 @@ async function main() {
   // --- Markers, route, trails and the lidar point cloud ---------------------
   const lift = (x, y, above) => toScene(x, y, groundAt(x, y) + above);
 
-  const astronaut = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.0, 4, 12),
-    new THREE.MeshStandardMaterial({ color: COLORS.astronaut, emissive: COLORS.astronaut, emissiveIntensity: 0.4 }));
+  // Real models, real size, standing at their origin and facing +x (heading 0). Each keeps a simple
+  // stand-in until its file has loaded, so the map works without them.
+  const gltfLoader = new GLTFLoader();
+  function withModel(standIn, url) {
+    const group = new THREE.Group();
+    group.add(standIn);
+    gltfLoader.load(url, (gltf) => { group.remove(standIn); group.add(gltf.scene); }, undefined, () => {});
+    return group;
+  }
+  const flat = (color, options = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...options });
+  function part(geometry, material, x, y, z) {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, z);
+    return mesh;
+  }
+
+  // Astronaut: NASA's Z2 suit, as in Isaac Sim (app/models/astronaut.glb from sim/export_suit_glb.py)
+  const suitStandIn = part(new THREE.CapsuleGeometry(0.35, 1.2, 4, 12), flat(COLORS.astronaut), 0, 0.95, 0);
+  const astronaut = withModel(suitStandIn, "/app/models/astronaut.glb");
   const astronautBeacon = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 30, 6),
     new THREE.MeshBasicMaterial({ color: COLORS.astronaut, transparent: true, opacity: 0.5 }));
-  const rover = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.6, 4),
-    new THREE.MeshStandardMaterial({ color: COLORS.rover, emissive: COLORS.rover, emissiveIntensity: 0.3 }));
-  rover.geometry.rotateZ(-Math.PI / 2); // cone points along +x, the heading 0
+
+  // Support rover: the Clearpath Jackal with a Unitree Z1 arm that the simulation drives. Isaac Sim streams
+  // the Jackal from its asset server, so the map rebuilds it from boxes at its real size (0.51 × 0.43 m).
+  const rover = new THREE.Group();
+  const black = flat(0x1c1d21), yellow = flat(COLORS.rover), grey = flat(0xd6d6d6, { metalness: 0.3 });
+  rover.add(part(new THREE.BoxGeometry(0.51, 0.18, 0.32), black, 0, 0.17, 0));
+  rover.add(part(new THREE.BoxGeometry(0.46, 0.03, 0.40), yellow, 0, 0.275, 0));
+  for (const x of [-0.13, 0.13]) {
+    for (const z of [-0.2, 0.2]) {
+      const wheel = part(new THREE.CylinderGeometry(0.1, 0.1, 0.07, 20), black, x, 0.1, z);
+      wheel.rotation.x = Math.PI / 2;
+      rover.add(wheel);
+    }
+  }
+  // Z1 arm in its stowed pose: base, upper arm leaning back, forearm forward
+  rover.add(part(new THREE.CylinderGeometry(0.05, 0.06, 0.08, 16), grey, 0.08, 0.33, 0));
+  const upperArm = part(new THREE.BoxGeometry(0.05, 0.35, 0.05), grey, 0.02, 0.5, 0);
+  upperArm.rotation.z = 0.35;
+  const forearm = part(new THREE.BoxGeometry(0.3, 0.045, 0.045), grey, 0.1, 0.66, 0);
+  rover.add(upperArm, forearm);
   // Goal: an arrow pointing down at the target, its tip on the ground
   const goalMarker = new THREE.Group();
   const goalArrow = new THREE.Group();
@@ -211,8 +246,9 @@ async function main() {
   arrowShaft.position.y = 11;
   goalArrow.add(arrowHead, arrowShaft);
   goalMarker.add(goalArrow);
-  const crewRover = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.2, 2),
-    new THREE.MeshStandardMaterial({ color: COLORS.crew }));
+  // Crew rover at the return point: Gosia's pressurised rover, assembled by cad/assemble_rovers.py
+  const crewRover = withModel(part(new THREE.BoxGeometry(5.8, 2.1, 2.5), flat(COLORS.crew), 0, 1.6, 0),
+    "/app/cad/crew_pressurised.glb");
   for (const marker of [astronaut, astronautBeacon, rover, goalMarker, crewRover]) { marker.visible = false; scene.add(marker); }
 
   const routeLine = new THREE.Line(new THREE.BufferGeometry(),
@@ -722,7 +758,7 @@ async function main() {
     $("alert").hidden = !suit.turn_back;
     $("alert").textContent = "Turn back: oxygen margin for the return is almost used up";
     const [rx, ry] = suit.return_point;
-    crewRover.position.copy(lift(rx, ry, 1.1));
+    crewRover.position.copy(lift(rx, ry, 0));
     crewRover.visible = true;
   }
 
@@ -764,7 +800,8 @@ async function main() {
 
     const a = message.astronaut;
     if (a) {
-      astronaut.position.copy(lift(a.x, a.y, 0.9));
+      astronaut.position.copy(lift(a.x, a.y, 0));
+      astronaut.rotation.y = (a.heading_deg * Math.PI) / 180;
       astronautBeacon.position.copy(lift(a.x, a.y, 15));
       astronaut.visible = astronautBeacon.visible = true;
       pushTrail(astronautTrail, a.x, a.y);
@@ -797,7 +834,7 @@ async function main() {
 
     const r = message.rover;
     if (r) {
-      rover.position.copy(lift(r.x, r.y, 0.4));
+      rover.position.copy(lift(r.x, r.y, 0));
       rover.rotation.y = (r.heading_deg * Math.PI) / 180;
       rover.visible = true;
       pushTrail(roverTrail, r.x, r.y);

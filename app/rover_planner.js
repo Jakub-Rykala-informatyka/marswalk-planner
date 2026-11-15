@@ -250,14 +250,15 @@ export async function initPlanner({ send }) {
       body.scale.setScalar(cadScale[plan.rover]);
       const bounds = new THREE.Box3().setFromObject(body);
       const centre = bounds.getCenter(new THREE.Vector3());
-      const lift = R * 1.3; // the body rests on the wheels, as in the stand-in
+      let hasWheels = false;
+      body.traverse((node) => { if (/wheel/i.test(node.name)) hasWheels = true; });
+      // An assembled rover (cad/assemble_rovers.py) stands on its own wheels; a bare body rests on added ones
+      const lift = hasWheels ? 0 : R * 1.3;
       body.position.set(-centre.x, lift - bounds.min.y, -centre.z);
       model.add(body);
       top = lift + (bounds.max.y - bounds.min.y);
       // Wheels: Gosia exports some bodies without them, so the wheel part is placed at the catalogue spots
       const wheelModel = cadScenes[`${plan.rover}_wheel`];
-      let hasWheels = false;
-      body.traverse((node) => { if (/wheel/i.test(node.name)) hasWheels = true; });
       if (wheelModel && !hasWheels) {
         const xs = wheels > 4 ? [-0.38 * L, 0, 0.38 * L] : [-0.36 * L, 0.36 * L];
         for (const x of xs) {

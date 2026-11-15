@@ -125,3 +125,15 @@ Modele GLB z archiwum Gosi są w `app/cad/`. Podgląd w zakładce „Rover plann
 
 Pliki `.ipt` (Inventor) i `OldVersions` nie idą do repozytorium. Katalog Gosi `cad/rover_catalog.json` ma inny format niż `app/rover_catalog.json` i nie jest jeszcze używany: do decyzji, który katalog zostaje.
 
+
+---
+
+## Aktualizacja: złożone łaziki
+
+Gotowe pliki `crew_pressurised` i `crew_open` z archiwum nie pasowały do części: kabina była szersza od podwozia i schodziła w koła, koła miały inną szerokość niż `*_wheel`, a znaczniki montażu nazywały się „Bryła2…” zamiast `mount_*`. Łaziki są teraz składane z części skryptem `cad/assemble_rovers.py`:
+
+- podwozie `*_chassis` plus koła `*_wheel` (6 albo 4), 5 cm od boku podwozia, oś koła na wysokości promienia,
+- znaczniki przemianowane na `mount_arm_1`, `mount_bay_1` … według tabel wyżej,
+- wynik: `cad/crew_pressurised.step` i `cad/crew_open.step` (jedna część z wieloma bryłami, jak eksport z Inventora) oraz `app/cad/crew_*.glb` dla dashboardu (oś Y w górę, metry).
+
+Części źródłowe są w `cad/parts/`. Jeśli poprawisz podwozie albo koło, podmień plik w `cad/parts/` i uruchom skrypt jeszcze raz.
